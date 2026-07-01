@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
+use unicode_width::UnicodeWidthChar;
 
 use crate::app::{App, EditorViewport, Mode};
 use crate::highlight;
@@ -204,7 +205,7 @@ fn render_line_with_highlights(
         } else {
             ch.to_string()
         };
-        let char_width = char_str.chars().count();
+        let char_width = UnicodeWidthChar::width(ch).unwrap_or(1);
 
         let mut char_style = Style::default().fg(app.theme.fg);
 

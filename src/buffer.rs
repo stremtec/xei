@@ -1,3 +1,5 @@
+use unicode_width::UnicodeWidthChar;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Position {
     pub row: usize,
@@ -126,7 +128,7 @@ impl Buffer {
             if i >= buf_col {
                 return visual;
             }
-            visual += if ch == '\t' { 4 - (visual % 4) } else { 1 };
+            visual += if ch == '\t' { 4 - (visual % 4) } else { ch.width().unwrap_or(1) };
         }
         visual
     }
@@ -139,7 +141,7 @@ impl Buffer {
             let w = if ch == '\t' {
                 4 - (visual % 4)
             } else {
-                1
+                ch.width().unwrap_or(1)
             };
             if visual + w > screen_col {
                 return buf_col;
@@ -656,6 +658,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_col_roundtrip_cjk() {
+        let buf = Buffer::from_string("안녕하세요");
+        for bc in 0..=buf.line(0).chars().count() {
+            let sc = buf.buffer_col_to_screen_col(0, bc);
+            let back = buf.screen_col_to_buffer_col(0, sc);
+            assert_eq!(back, bc, "roundtrip failed at buf_col={} for '안녕하세요'", bc);
+        }
+    }
+
+    #[test]
+    fn test_cjk_width() {
+        let buf = Buffer::from_string("a한b");
+        assert_eq!(buf.buffer_col_to_screen_col(0, 0), 0); // 'a' at col 0
+        assert_eq!(buf.buffer_col_to_screen_col(0, 1), 1); // '한' at col 1 → screen col 1
+        assert_eq!(buf.buffer_col_to_screen_col(0, 2), 3); // 'b' at col 2 → screen col 3 (한=width 2)
+    }
     #[test]
     fn test_col_roundtrip_mixed() {
         let buf = Buffer::from_string("  \t  hello\tworld");

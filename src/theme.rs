@@ -41,7 +41,7 @@ pub struct Theme {
     pub cursor: Color,
 }
 
-static THEMES: &[Theme] = &[OCEAN, MONOKAI, NORD, SOLARIZED, GRUVBOX, EVERFOREST, SAKURA];
+static THEMES: &[Theme] = &[OCEAN, MONOKAI, NORD, SOLARIZED, GRUVBOX, EVERFOREST, SAKURA, NEWSPAPER];
 
 pub fn all_themes() -> &'static [Theme] {
     THEMES
@@ -317,4 +317,42 @@ pub static SAKURA: Theme = Theme {
     xlc_prompt: Color::Rgb(219, 112, 147),
     xlc_border: Color::Rgb(219, 112, 147),
     cursor: Color::Rgb(136, 34, 56),
+};
+
+// ── Newspaper ──────────────────────────────────────────
+pub static NEWSPAPER: Theme = Theme {
+    name: "newspaper",
+    bg: Color::Rgb(255, 243, 229),
+    fg: Color::Rgb(125, 130, 172),
+    keyword: Color::Rgb(125, 130, 172),
+    string: Color::Rgb(140, 145, 185),
+    comment: Color::Rgb(190, 185, 195),
+    number: Color::Rgb(150, 140, 175),
+    type_name: Color::Rgb(172, 176, 214),
+    line_no: Color::Rgb(200, 195, 200),
+    editor_bg: Color::Rgb(255, 243, 229),
+    status_bg: Color::Rgb(254, 249, 244),
+    status_fg: Color::Rgb(125, 130, 172),
+    border: Color::Rgb(228, 223, 225),
+    selection_bg: Color::Rgb(228, 223, 225),
+    search_bg: Color::Rgb(220, 215, 210),
+    mode_normal: Color::Rgb(125, 130, 172),
+    mode_insert: Color::Rgb(172, 176, 214),
+    mode_visual: Color::Rgb(140, 135, 175),
+    mode_xlc: Color::Rgb(172, 176, 214),
+    completion_bg: Color::Rgb(254, 249, 244),
+    completion_selected: Color::Rgb(125, 130, 172),
+    completion_border: Color::Rgb(172, 176, 214),
+    explorer_bg: Color::Rgb(254, 249, 244),
+    explorer_fg: Color::Rgb(125, 130, 172),
+    explorer_dir: Color::Rgb(125, 130, 172),
+    explorer_selected: Color::Rgb(172, 176, 214),
+    terminal_bg: Color::Rgb(254, 249, 244),
+    terminal_fg: Color::Rgb(125, 130, 172),
+    terminal_prompt: Color::Rgb(172, 176, 214),
+    xlc_bg: Color::Rgb(254, 249, 244),
+    xlc_fg: Color::Rgb(125, 130, 172),
+    xlc_prompt: Color::Rgb(172, 176, 214),
+    xlc_border: Color::Rgb(228, 223, 225),
+    cursor: Color::Rgb(125, 130, 172),
 };

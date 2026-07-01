@@ -1,0 +1,28 @@
+{
+  "name": "xei-editor",
+  "version": "0.1.0",
+  "description": "xei (晴) — a modern Vim-like terminal editor in Rust",
+  "repository": "github:stremtec/xei",
+  "license": "MIT",
+  "bin": {
+    "xei": "bin/xei"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "install.js",
+    "bin/"
+  ],
+  "keywords": [
+    "editor",
+    "vim",
+    "tui",
+    "terminal",
+    "text-editor",
+    "cli",
+    "rust"
+  ],
+  "os": ["darwin", "linux"],
+  "cpu": ["x64", "arm64"]
+}

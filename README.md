@@ -23,7 +23,13 @@ A modern, fast terminal text editor written in Rust. Vim-modal editing with IDE 
 
 ## Installation
 
-### From crates.io (recommended)
+### npm
+
+```bash
+npm install -g xei-editor
+```
+
+### Cargo
 
 ```bash
 cargo install xei

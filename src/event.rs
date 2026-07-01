@@ -167,6 +167,37 @@ fn edge_scroll(app: &mut App, row: u16) {
 const LINE_NO_WIDTH: u16 = 5;
 
 fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
+    if modifiers.contains(KeyModifiers::SUPER) {
+        match code {
+            KeyCode::Char('c') => {
+                if matches!(app.mode, Mode::Visual | Mode::VisualLine) {
+                    app.yank_selection();
+                    if let Some(ref text) = app.yank_buffer {
+                        crate::clipboard::copy(text);
+                    }
+                    app.message = String::from("Copied to clipboard");
+                }
+                return;
+            }
+            KeyCode::Char('v') => {
+                if let Some(text) = crate::clipboard::paste() {
+                    app.push_undo();
+                    for ch in text.chars() {
+                        if ch == '\n' {
+                            app.buffer.insert_newline();
+                        } else if ch == '\r' {
+                        } else {
+                            app.buffer.insert_char(ch);
+                        }
+                    }
+                    app.message = String::from("Pasted from clipboard");
+                }
+                return;
+            }
+            _ => {}
+        }
+    }
+
     if code == KeyCode::F(12) {
         if app.terminal.open {
             app.terminal.open = false;

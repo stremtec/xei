@@ -13,6 +13,7 @@ use ratatui::{
 
 mod app;
 mod buffer;
+mod clipboard;
 mod completion;
 mod config;
 mod event;

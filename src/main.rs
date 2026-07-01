@@ -101,6 +101,19 @@ fn run_app(
             break;
         }
         app.lsp.poll();
+        let lsp_comps: Vec<_> = std::mem::take(&mut app.lsp.pending_completions);
+        if !lsp_comps.is_empty() && app.completions.active {
+            for item in lsp_comps {
+                let exists = app.completions.suggestions.iter().any(|s| s.label == item.label);
+                if !exists {
+                    app.completions.suggestions.push(crate::completion::Suggestion {
+                        label: item.label.clone(),
+                        detail: item.detail.unwrap_or_else(|| "LSP".to_string()),
+                        insert_text: item.label,
+                    });
+                }
+            }
+        }
         if let Some(loc) = app.lsp.pending_definition.take() {
             let path_str = loc.path.clone();
             app.open_new_tab(&path_str);

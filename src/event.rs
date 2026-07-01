@@ -786,6 +786,12 @@ fn trigger_completion(app: &mut App) {
     let prefix = word_before_cursor(app);
     let ext = app.file_extension();
     app.completions.activate(&prefix, ext.as_deref());
+    if app.lsp.server_running {
+        if let Some(ref path) = app.filename {
+            let c = app.buffer.cursor();
+            app.lsp.request_completion(&path.display().to_string(), c.row, c.col);
+        }
+    }
 }
 
 fn auto_trigger_completion(app: &mut App, c: char) {

@@ -12,6 +12,7 @@ pub struct LspClient {
     pub diagnostics: Vec<Diagnostic>,
     pub server_running: bool,
     pub pending_definition: Option<Location>,
+    pub pending_completions: Vec<CompletionItem>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +50,7 @@ pub struct CompletionItem {
 
 impl Default for LspClient {
     fn default() -> Self {
-        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, pending_definition: None }
+        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, pending_definition: None, pending_completions: Vec::new() }
     }
 }
 
@@ -171,6 +172,9 @@ impl LspClient {
                     Ok(LspMessage::Definition { path, row, col }) => {
                         self.pending_definition = Some(Location { path: path.display().to_string(), row, col });
                     }
+                    Ok(LspMessage::Completions(items)) => {
+                        self.pending_completions = items;
+                    }
                     Ok(_msg) => {},
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => { self.server_running = false; break; }
@@ -220,9 +224,19 @@ fn parse_message(text: &str) -> Option<LspMessage> {
         let row = extract_int(text, "\"line\":").unwrap_or(0) as usize;
         let col = extract_int(text, "\"character\":").unwrap_or(0) as usize;
         if let Some(uri) = extract_str(text, "\"uri\":\"") {
-            let path = if uri.starts_with("file://") { &uri[7..] } else { &uri };
+            let path = if uri.starts_with("file://") { &uri[7..] } else { uri };
             return Some(LspMessage::Definition { path: PathBuf::from(path), row, col });
         }
+    }
+
+    if text.contains("\"completion\"") || text.contains("\"label\""){
+        let mut items = Vec::new();
+        for chunk in text.split("\"label\":\"").skip(1) {
+            let label = chunk.split('"').next().unwrap_or("").to_string();
+            let detail = extract_str(chunk, "\"detail\":\"").map(|s| s.to_string());
+            items.push(CompletionItem { label, detail });
+        }
+        return Some(LspMessage::Completions(items));
     }
 
     None

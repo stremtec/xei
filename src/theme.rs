@@ -41,7 +41,7 @@ pub struct Theme {
     pub cursor: Color,
 }
 
-static THEMES: &[Theme] = &[OCEAN, MONOKAI, NORD, SOLARIZED, GRUVBOX, EVERFOREST, SAKURA, NEWSPAPER, MONO];
+static THEMES: &[Theme] = &[OCEAN, MONOKAI, NORD, SOLARIZED, GRUVBOX, EVERFOREST, SAKURA, NEWSPAPER, MONO, MONO_DARK];
 
 pub fn all_themes() -> &'static [Theme] {
     THEMES
@@ -393,4 +393,42 @@ pub static MONO: Theme = Theme {
     xlc_prompt: Color::Rgb(80, 80, 80),
     xlc_border: Color::Rgb(200, 200, 200),
     cursor: Color::Rgb(0, 0, 0),
+};
+
+// ── Mono Dark ───────────────────────────────────────────
+pub static MONO_DARK: Theme = Theme {
+    name: "mono_dark",
+    bg: Color::Rgb(20, 20, 20),
+    fg: Color::Rgb(230, 230, 230),
+    keyword: Color::Rgb(255, 255, 255),
+    string: Color::Rgb(190, 190, 190),
+    comment: Color::Rgb(100, 100, 100),
+    number: Color::Rgb(210, 210, 210),
+    type_name: Color::Rgb(200, 200, 200),
+    line_no: Color::Rgb(70, 70, 70),
+    editor_bg: Color::Rgb(20, 20, 20),
+    status_bg: Color::Rgb(28, 28, 28),
+    status_fg: Color::Rgb(230, 230, 230),
+    border: Color::Rgb(50, 50, 50),
+    selection_bg: Color::Rgb(60, 60, 60),
+    search_bg: Color::Rgb(50, 50, 30),
+    mode_normal: Color::Rgb(200, 200, 200),
+    mode_insert: Color::Rgb(150, 150, 150),
+    mode_visual: Color::Rgb(180, 180, 180),
+    mode_xlc: Color::Rgb(170, 170, 170),
+    completion_bg: Color::Rgb(30, 30, 30),
+    completion_selected: Color::Rgb(200, 200, 200),
+    completion_border: Color::Rgb(80, 80, 80),
+    explorer_bg: Color::Rgb(16, 16, 16),
+    explorer_fg: Color::Rgb(230, 230, 230),
+    explorer_dir: Color::Rgb(210, 210, 210),
+    explorer_selected: Color::Rgb(60, 60, 60),
+    terminal_bg: Color::Rgb(24, 24, 24),
+    terminal_fg: Color::Rgb(230, 230, 230),
+    terminal_prompt: Color::Rgb(190, 190, 190),
+    xlc_bg: Color::Rgb(26, 26, 26),
+    xlc_fg: Color::Rgb(210, 210, 210),
+    xlc_prompt: Color::Rgb(190, 190, 190),
+    xlc_border: Color::Rgb(70, 70, 70),
+    cursor: Color::Rgb(255, 255, 255),
 };

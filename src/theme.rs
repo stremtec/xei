@@ -41,7 +41,7 @@ pub struct Theme {
     pub cursor: Color,
 }
 
-static THEMES: &[Theme] = &[OCEAN, MONOKAI, NORD, SOLARIZED, GRUVBOX, EVERFOREST, SAKURA, NEWSPAPER];
+static THEMES: &[Theme] = &[OCEAN, MONOKAI, NORD, SOLARIZED, GRUVBOX, EVERFOREST, SAKURA, NEWSPAPER, MONO];
 
 pub fn all_themes() -> &'static [Theme] {
     THEMES
@@ -355,4 +355,42 @@ pub static NEWSPAPER: Theme = Theme {
     xlc_prompt: Color::Rgb(172, 176, 214),
     xlc_border: Color::Rgb(228, 223, 225),
     cursor: Color::Rgb(125, 130, 172),
+};
+
+// ── Mono ───────────────────────────────────────────────
+pub static MONO: Theme = Theme {
+    name: "mono",
+    bg: Color::Rgb(255, 255, 255),
+    fg: Color::Rgb(30, 30, 30),
+    keyword: Color::Rgb(0, 0, 0),
+    string: Color::Rgb(80, 80, 80),
+    comment: Color::Rgb(170, 170, 170),
+    number: Color::Rgb(50, 50, 50),
+    type_name: Color::Rgb(60, 60, 60),
+    line_no: Color::Rgb(190, 190, 190),
+    editor_bg: Color::Rgb(255, 255, 255),
+    status_bg: Color::Rgb(245, 245, 245),
+    status_fg: Color::Rgb(30, 30, 30),
+    border: Color::Rgb(220, 220, 220),
+    selection_bg: Color::Rgb(230, 230, 230),
+    search_bg: Color::Rgb(255, 255, 200),
+    mode_normal: Color::Rgb(60, 60, 60),
+    mode_insert: Color::Rgb(120, 120, 120),
+    mode_visual: Color::Rgb(80, 80, 80),
+    mode_xlc: Color::Rgb(100, 100, 100),
+    completion_bg: Color::Rgb(250, 250, 250),
+    completion_selected: Color::Rgb(60, 60, 60),
+    completion_border: Color::Rgb(200, 200, 200),
+    explorer_bg: Color::Rgb(248, 248, 248),
+    explorer_fg: Color::Rgb(30, 30, 30),
+    explorer_dir: Color::Rgb(50, 50, 50),
+    explorer_selected: Color::Rgb(220, 220, 220),
+    terminal_bg: Color::Rgb(250, 250, 250),
+    terminal_fg: Color::Rgb(30, 30, 30),
+    terminal_prompt: Color::Rgb(80, 80, 80),
+    xlc_bg: Color::Rgb(248, 248, 248),
+    xlc_fg: Color::Rgb(50, 50, 50),
+    xlc_prompt: Color::Rgb(80, 80, 80),
+    xlc_border: Color::Rgb(200, 200, 200),
+    cursor: Color::Rgb(0, 0, 0),
 };

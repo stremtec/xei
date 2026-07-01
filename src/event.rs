@@ -360,6 +360,10 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('p') => app.paste(),
         KeyCode::Char('u') => app.undo(),
+        KeyCode::Char('t') => {
+            app.pending_key = Some('t');
+            app.message = String::from("-- PENDING: t --");
+        }
         KeyCode::Char('n') => app.search_next(),
         KeyCode::Char('N') => app.search_prev(),
         KeyCode::Char('G') => {
@@ -370,10 +374,6 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         KeyCode::Char('g') => {
             app.pending_key = Some('g');
             app.message = String::from("-- PENDING: g --");
-        }
-        KeyCode::Char('t') => {
-            app.pending_key = Some('t');
-            app.message = String::from("-- PENDING: t --");
         }
         _ => {}
     }
@@ -390,6 +390,13 @@ fn handle_pending(app: &mut App, pending: char, code: KeyCode) {
             app.buffer.cursor.row = 0;
             app.buffer.cursor.col = 0;
             app.message = String::new();
+        }
+        ('g', KeyCode::Char('d')) => {
+            if let Some(ref path) = app.filename {
+                let cursor = app.buffer.cursor();
+                app.lsp.request_definition(&path.display().to_string(), cursor.row, cursor.col);
+                app.message = String::from("Requested go-to-definition");
+            }
         }
         ('g', _) => {
             app.message = String::from("g: use gg (go to top)");

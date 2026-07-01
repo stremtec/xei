@@ -7,6 +7,7 @@ use crate::buffer::{Buffer, Position};
 use crate::completion::Completions;
 use crate::config;
 use crate::explorer::Explorer;
+use crate::lsp::LspClient;
 use crate::syntax::SyntaxEngine;
 use crate::term::Terminal;
 use crate::theme::{self, Theme, OCEAN};
@@ -59,6 +60,7 @@ pub struct App {
     pub buffers: Vec<BufferTab>,
     pub current_buffer: usize,
     pub syntax: SyntaxEngine,
+    pub lsp: LspClient,
 }
 
 #[derive(Clone)]
@@ -136,6 +138,7 @@ impl Default for App {
             }],
             current_buffer: 0,
             syntax: SyntaxEngine::new(),
+            lsp: LspClient::new(),
         }
     }
 }
@@ -367,6 +370,13 @@ impl App {
             XlcCmd::BufDelete => {
                 self.close_current_tab();
                 self.xlc.add_output("Buffer closed");
+            }
+            XlcCmd::LspStart(cmd) => {
+                if let Some(ref path) = self.filename {
+                    let root = path.parent().map(|p| p.display().to_string()).unwrap_or_default();
+                    self.lsp.start(&cmd, &root, &path.display().to_string());
+                    self.xlc.add_output(&format!("LSP started: {}", cmd));
+                }
             }
             XlcCmd::None => {
                 self.message = String::from("Unknown command. Try :help");

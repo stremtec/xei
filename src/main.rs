@@ -19,6 +19,7 @@ mod config;
 mod event;
 mod explorer;
 mod highlight;
+mod lsp;
 mod syntax;
 mod term;
 mod theme;
@@ -99,6 +100,7 @@ fn run_app(
         if !event::handle_events(app)? {
             break;
         }
+        app.lsp.poll();
         app.check_external_change();
     }
     Ok(())

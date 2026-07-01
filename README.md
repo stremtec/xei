@@ -10,6 +10,16 @@ brew install stremtec/xei/xei   # Homebrew
 cargo install xei               # Cargo
 ```
 
+**Windows (PowerShell):**
+```powershell
+iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
+```
+
+**macOS / Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/stremtec/xei/master/install.sh | bash
+```
+
 ```bash
 xei                  # blank buffer
 xei src/main.rs      # open a file

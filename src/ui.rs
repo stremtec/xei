@@ -191,14 +191,17 @@ fn render_line_with_highlights(
         .add_modifier(Modifier::BOLD);
 
     let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut vis_col = 0usize;
 
     for i in 0..len {
         let ch = chars[i];
         let char_str = if ch == '\t' {
-            "    ".to_string()
+            let spaces = 4 - (vis_col % 4);
+            " ".repeat(spaces)
         } else {
             ch.to_string()
         };
+        let char_width = char_str.chars().count();
 
         let mut char_style = Style::default().fg(app.theme.fg);
 
@@ -237,6 +240,7 @@ fn render_line_with_highlights(
         }
 
         spans.push(Span::styled(char_str, char_style));
+        vis_col += char_width;
     }
 
     spans

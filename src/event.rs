@@ -133,6 +133,7 @@ fn screen_to_buffer_clamped(app: &App, column: u16, row: u16) -> Position {
     let col = (clamped_col.saturating_sub(text_x)) as usize;
     let visible_row = (clamped_row.saturating_sub(vp.y)) as usize;
     let buffer_row = (visible_row + app.scroll).min(app.buffer.line_count().saturating_sub(1));
+    let col = app.buffer.screen_col_to_buffer_col(buffer_row, col);
     let max_col = app.buffer.line(buffer_row).chars().count();
 
     Position::new(buffer_row, col.min(max_col))

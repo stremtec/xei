@@ -119,6 +119,25 @@ impl Buffer {
         }
     }
 
+    pub fn screen_col_to_buffer_col(&self, row: usize, screen_col: usize) -> usize {
+        let line = self.line(row);
+        let mut visual = 0;
+        let mut buf_col = 0;
+        for ch in line.chars() {
+            let w = if ch == '\t' {
+                4 - (visual % 4)
+            } else {
+                1
+            };
+            if visual + w > screen_col {
+                return buf_col;
+            }
+            visual += w;
+            buf_col += 1;
+        }
+        buf_col
+    }
+
     #[allow(dead_code)]
     pub fn append_to_line(&mut self, row: usize, text: &str) {
         if row < self.lines.len() {
@@ -585,6 +604,16 @@ mod tests {
         assert_eq!(buf.line(1), "b");
         assert_eq!(buf.line(2), "c");
         assert_eq!(buf.cursor.row, 1);
+    }
+
+    #[test]
+    fn test_screen_col_to_buffer_col() {
+        let buf = Buffer::from_string("\thello");
+        assert_eq!(buf.screen_col_to_buffer_col(0, 0), 0);
+        assert_eq!(buf.screen_col_to_buffer_col(0, 1), 0);
+        assert_eq!(buf.screen_col_to_buffer_col(0, 3), 0);
+        assert_eq!(buf.screen_col_to_buffer_col(0, 4), 1);
+        assert_eq!(buf.screen_col_to_buffer_col(0, 5), 2);
     }
 
     #[test]

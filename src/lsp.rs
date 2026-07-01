@@ -11,8 +11,10 @@ pub struct LspClient {
     next_id: u64,
     pub diagnostics: Vec<Diagnostic>,
     pub server_running: bool,
+    pub server_name: String,
     pub pending_definition: Option<Location>,
     pub pending_completions: Vec<CompletionItem>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -50,7 +52,7 @@ pub struct CompletionItem {
 
 impl Default for LspClient {
     fn default() -> Self {
-        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, pending_definition: None, pending_completions: Vec::new() }
+        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), pending_definition: None, pending_completions: Vec::new(), error: None }
     }
 }
 
@@ -65,7 +67,10 @@ impl LspClient {
             .args(&parts[1..]).current_dir(root)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
             .spawn()
-        { Ok(c) => c, Err(_) => return };
+        { Ok(c) => c, Err(e) => {
+            self.error = Some(format!("LSP failed to start: {}", e));
+            return;
+        }};
 
         let stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
@@ -103,6 +108,7 @@ impl LspClient {
         self.stdin = Some(stdin);
         self.rx = Some(rx);
         self._child = Some(child);
+        self.server_name = parts[0].to_string();
 
         let init = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"initialize","params":{{"processId":null,"rootUri":"file://{}","capabilities":{{}}}}}}"#, self.next_id, root);
         self.next_id += 1;
@@ -155,6 +161,9 @@ impl LspClient {
         let root = std::path::Path::new(file_path).parent()
             .map(|p| p.display().to_string()).unwrap_or_default();
         self.start(cmd, &root, file_path);
+        if !self.server_running {
+            self.error = Some(format!("{} not found. Install it or set manually with :LspStart", cmd));
+        }
     }
 
     pub fn request_completion(&mut self, path: &str, row: usize, col: usize) {

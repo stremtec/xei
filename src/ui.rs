@@ -693,10 +693,11 @@ fn draw_statusline(f: &mut Frame, app: &App, area: Rect) {
     ]);
 
     let right_text = format!(
-        " Ln {}  Col {}  {}",
+        " Ln {}  Col {}  {}{}",
         cursor.row + 1,
         cursor.col + 1,
-        app.message
+        app.message,
+        if app.lsp.server_running { format!("  LSP: {} ({})", app.lsp.server_name, app.lsp.diagnostics.len()) } else if app.lsp.error.is_some() { "  LSP: error".to_string() } else { String::new() }
     );
 
     let right_len = right_text.len() as u16;

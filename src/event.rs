@@ -371,6 +371,10 @@ fn handle_normal(app: &mut App, code: KeyCode) {
             app.pending_key = Some('g');
             app.message = String::from("-- PENDING: g --");
         }
+        KeyCode::Char('t') => {
+            app.pending_key = Some('t');
+            app.message = String::from("-- PENDING: t --");
+        }
         _ => {}
     }
 }
@@ -389,6 +393,11 @@ fn handle_pending(app: &mut App, pending: char, code: KeyCode) {
         }
         ('g', _) => {
             app.message = String::from("g: use gg (go to top)");
+        }
+        ('t', KeyCode::Char('t')) => { app.next_tab(); }
+        ('t', KeyCode::Char('T')) => { app.prev_tab(); }
+        ('t', _) => {
+            app.message = String::from("t: use gt (next tab) or gT (prev tab)");
         }
         _ => {}
     }
@@ -581,19 +590,7 @@ fn handle_explorer(app: &mut App, code: KeyCode) {
 
 fn open_file(app: &mut App, path: &std::path::PathBuf) {
     let path_str = path.display().to_string();
-    if let Ok(content) = std::fs::read_to_string(path) {
-        app.buffer = crate::buffer::Buffer::from_string(&content);
-        app.filename = Some(path.clone());
-        app.scroll = 0;
-        app.undo_stack.push(app.buffer.snapshot());
-        app.modified = false;
-        app.search_pattern = None;
-        app.search_matches.clear();
-        app.visual_anchor = None;
-        app.mode = Mode::Normal;
-        app.explorer.close();
-        app.message = format!("Opened: {}", path_str);
-    }
+    app.open_new_tab(&path_str);
 }
 
 fn handle_terminal(app: &mut App, code: KeyCode) {

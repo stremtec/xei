@@ -17,6 +17,7 @@ impl Position {
     }
 }
 
+#[derive(Clone)]
 pub struct Buffer {
     lines: Vec<String>,
     pub cursor: Position,
@@ -432,6 +433,7 @@ fn char_class(c: char) -> CharClass {
     }
 }
 
+#[derive(Clone)]
 pub struct BufferSnapshot {
     lines: Vec<String>,
     cursor: Position,

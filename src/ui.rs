@@ -108,10 +108,42 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 }
 
+fn draw_tabbar(f: &mut Frame, app: &App, area: Rect) {
+    let mut spans = Vec::new();
+    for (i, tab) in app.buffers.iter().enumerate() {
+        let name = tab.filename.as_ref()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("[No Name]");
+        let is_current = i == app.current_buffer;
+        let style = if is_current {
+            Style::default().fg(Color::Black).bg(app.theme.border)
+        } else {
+            Style::default().fg(app.theme.line_no)
+        };
+        let modified = if tab.modified { " +" } else { "" };
+        spans.push(Span::styled(format!(" {} ", name), style));
+        spans.push(Span::styled(modified, Style::default().fg(app.theme.border)));
+        spans.push(Span::raw(" "));
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
 fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
     if area.width == 0 || area.height == 0 {
         return;
     }
+
+    let (_tab_area, main_area) = if app.buffers.len() > 1 {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
+            .split(area);
+        draw_tabbar(f, app, chunks[0]);
+        (chunks[0], chunks[1])
+    } else {
+        (Rect::default(), area)
+    };
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -128,7 +160,7 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
         ))
         .title_alignment(Alignment::Left);
 
-    let visible_height = (area.height as usize).saturating_sub(2);
+    let visible_height = (main_area.height as usize).saturating_sub(2);
     let scroll = app.scroll;
     let all_lines = app.buffer.lines();
     let selection = app.selected_range();
@@ -136,7 +168,7 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
 
     let mut visible_lines: Vec<(usize, &String)> = Vec::new();
     let mut wrap_height = 0;
-    let text_width = (area.width.saturating_sub(2 + LINE_NO_WIDTH)).max(1) as usize;
+    let text_width = (main_area.width.saturating_sub(2 + LINE_NO_WIDTH)).max(1) as usize;
 
     for (idx, line) in all_lines.iter().enumerate().skip(scroll) {
         let vis = visual_line_width(app, idx);
@@ -166,12 +198,12 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
         .block(block)
         .wrap(Wrap { trim: false });
 
-    f.render_widget(paragraph, area);
+    f.render_widget(paragraph, main_area);
 
     let cursor = app.buffer.cursor();
     let screen_col = app.buffer.buffer_col_to_screen_col(cursor.row, cursor.col);
 
-    let text_width = (area.width.saturating_sub(2 + LINE_NO_WIDTH)).max(1) as usize;
+    let text_width = (main_area.width.saturating_sub(2 + LINE_NO_WIDTH)).max(1) as usize;
     let mut display_row = 0usize;
     let mut found = false;
 
@@ -188,10 +220,10 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
     }
 
     if found {
-        let cursor_x = (area.x + 1 + LINE_NO_WIDTH + (screen_col % text_width) as u16)
-            .min(area.x + area.width.saturating_sub(1));
-        let cursor_y = (area.y + 1 + display_row as u16)
-            .min(area.y + area.height.saturating_sub(1));
+        let cursor_x = (main_area.x + 1 + LINE_NO_WIDTH + (screen_col % text_width) as u16)
+            .min(main_area.x + main_area.width.saturating_sub(1));
+        let cursor_y = (main_area.y + 1 + display_row as u16)
+            .min(main_area.y + main_area.height.saturating_sub(1));
         f.set_cursor_position((cursor_x, cursor_y));
     }
 }

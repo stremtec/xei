@@ -130,6 +130,7 @@ pub enum XlcCmd {
     Help,
     Search(String),
     Theme(String),
+    BufDelete,
 }
 
 fn parse_command(input: &str) -> XlcCmd {
@@ -157,10 +158,12 @@ fn parse_command(input: &str) -> XlcCmd {
         "help" | "h" | "?" => XlcCmd::Help,
         "find" | "/" if !arg.is_empty() => XlcCmd::Search(arg.to_string()),
         "theme" => XlcCmd::Theme(arg.to_string()),
+        "bd" => XlcCmd::BufDelete,
         _ => XlcCmd::None,
     }
 }
 
+#[derive(Clone)]
 pub struct UndoStack {
     snapshots: Vec<BufferSnapshot>,
     index: usize,

@@ -1,7 +1,7 @@
 # xei Windows installer — run in PowerShell
 # iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
 
-$VERSION = "v0.3.0"
+$VERSION = "v0.4.0"
 $REPO = "stremtec/xei"
 $TARGET = "x86_64-pc-windows-gnu"
 $BIN = "xei.exe"

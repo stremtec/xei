@@ -55,6 +55,18 @@ pub struct App {
     pub xlc_height: u16,
     pub xlc_separator_y: u16,
     pub file_mtime: Option<std::time::SystemTime>,
+    pub buffers: Vec<BufferTab>,
+    pub current_buffer: usize,
+}
+
+#[derive(Clone)]
+pub struct BufferTab {
+    pub buffer: Buffer,
+    pub filename: Option<PathBuf>,
+    pub scroll: usize,
+    pub modified: bool,
+    pub undo_stack: UndoStack,
+    pub file_mtime: Option<std::time::SystemTime>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +124,15 @@ impl Default for App {
             xlc_height: 11,
             xlc_separator_y: 0,
             file_mtime: None,
+            buffers: vec![BufferTab {
+                buffer: Buffer::new(),
+                filename: None,
+                scroll: 0,
+                modified: false,
+                undo_stack: UndoStack::new(),
+                file_mtime: None,
+            }],
+            current_buffer: 0,
         }
     }
 }
@@ -340,6 +361,10 @@ impl App {
                     self.xlc.add_output(&format!("Unknown theme: {}. Use :theme to list.", name));
                 }
             }
+            XlcCmd::BufDelete => {
+                self.close_current_tab();
+                self.xlc.add_output("Buffer closed");
+            }
             XlcCmd::None => {
                 self.message = String::from("Unknown command. Try :help");
                 self.xlc.add_output("Try :help for available commands.");
@@ -348,32 +373,7 @@ impl App {
     }
 
     fn open_in_place(&mut self, path: &str) {
-        let pb = PathBuf::from(path);
-        let abs_path = if pb.is_absolute() {
-            pb
-        } else {
-            env::current_dir()
-                .unwrap_or_default()
-                .join(&pb)
-        };
-        match fs::read_to_string(&abs_path) {
-            Ok(content) => {
-                self.buffer = Buffer::from_string(&content);
-                self.filename = Some(abs_path);
-                self.scroll = 0;
-                self.visual_anchor = None;
-                self.search_pattern = None;
-                self.search_matches.clear();
-                self.modified = false;
-                self.undo_stack.push(self.buffer.snapshot());
-                self.record_mtime();
-                self.message = format!("Opened: {}", path);
-                self.xlc.add_output(&format!("Opened {}", path));
-            }
-            Err(e) => {
-                self.xlc.add_output(&format!("Error: {}", e));
-            }
-        }
+        self.open_new_tab(path);
     }
 
     fn move_file(&mut self, dest: &str) {
@@ -623,6 +623,117 @@ impl App {
                 }
             }
         }
+    }
+
+    pub fn save_state_to_tab(&mut self) {
+        if self.current_buffer < self.buffers.len() {
+            let tab = &mut self.buffers[self.current_buffer];
+            tab.buffer = self.buffer.clone();
+            tab.filename = self.filename.clone();
+            tab.scroll = self.scroll;
+            tab.modified = self.modified;
+            tab.undo_stack = self.undo_stack.clone();
+            tab.file_mtime = self.file_mtime;
+        }
+    }
+
+    pub fn restore_state_from_tab(&mut self) {
+        if let Some(tab) = self.buffers.get(self.current_buffer).cloned() {
+            self.buffer = tab.buffer;
+            self.filename = tab.filename;
+            self.scroll = tab.scroll;
+            self.modified = tab.modified;
+            self.undo_stack = tab.undo_stack;
+            self.file_mtime = tab.file_mtime;
+        }
+    }
+
+    pub fn open_new_tab(&mut self, path: &str) {
+        self.save_state_to_tab();
+
+        let pathbuf = PathBuf::from(path);
+        let abs_path = if pathbuf.is_absolute() {
+            pathbuf
+        } else {
+            env::current_dir().unwrap_or_default().join(&pathbuf)
+        };
+
+        for (i, tab) in self.buffers.iter().enumerate() {
+            if tab.filename.as_ref() == Some(&abs_path) {
+                self.current_buffer = i;
+                self.restore_state_from_tab();
+                self.message = format!("Switched to: {}", abs_path.display());
+                return;
+            }
+        }
+
+        let content = fs::read_to_string(&abs_path).unwrap_or_default();
+        let buffer = Buffer::from_string(&content);
+        let mtime = std::fs::metadata(&abs_path).ok().and_then(|m| m.modified().ok());
+        let mut undo = UndoStack::new();
+        undo.push(buffer.snapshot());
+
+        self.buffers.push(BufferTab {
+            buffer,
+            filename: Some(abs_path.clone()),
+            scroll: 0,
+            modified: false,
+            undo_stack: undo,
+            file_mtime: mtime,
+        });
+        self.current_buffer = self.buffers.len() - 1;
+        self.restore_state_from_tab();
+        self.message = format!("Opened: {}", abs_path.display());
+    }
+
+    pub fn next_tab(&mut self) {
+        if self.buffers.len() < 2 {
+            return;
+        }
+        self.save_state_to_tab();
+        self.current_buffer = (self.current_buffer + 1) % self.buffers.len();
+        self.restore_state_from_tab();
+    }
+
+    pub fn prev_tab(&mut self) {
+        if self.buffers.len() < 2 {
+            return;
+        }
+        self.save_state_to_tab();
+        if self.current_buffer == 0 {
+            self.current_buffer = self.buffers.len() - 1;
+        } else {
+            self.current_buffer -= 1;
+        }
+        self.restore_state_from_tab();
+    }
+
+    pub fn close_current_tab(&mut self) {
+        if self.buffers.len() <= 1 {
+            self.buffer = Buffer::new();
+            self.filename = None;
+            self.scroll = 0;
+            self.modified = false;
+            self.undo_stack = UndoStack::new();
+            self.undo_stack.push(self.buffer.snapshot());
+            self.file_mtime = None;
+            self.buffers[0] = BufferTab {
+                buffer: self.buffer.clone(),
+                filename: None,
+                scroll: 0,
+                modified: false,
+                undo_stack: self.undo_stack.clone(),
+                file_mtime: None,
+            };
+            return;
+        }
+
+        self.buffers.remove(self.current_buffer);
+        if self.current_buffer >= self.buffers.len() {
+            self.current_buffer = self.buffers.len() - 1;
+        }
+        self.restore_state_from_tab();
+        self.message = String::from("Buffer closed");
     }
 }
 

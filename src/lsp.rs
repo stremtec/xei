@@ -138,9 +138,18 @@ impl LspClient {
         let cmd = match ext {
             "rs" => "rust-analyzer",
             "py" => "pyright-langserver --stdio",
-            "ts" | "tsx" | "js" | "jsx" => "typescript-language-server --stdio",
-            "c" | "h" | "cpp" | "hpp" | "cc" => "clangd",
+            "ts" | "tsx" => "typescript-language-server --stdio",
+            "js" | "jsx" | "mjs" | "cjs" => "typescript-language-server --stdio",
+            "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" => "clangd",
             "go" => "gopls",
+            "html" | "htm" => "vscode-html-language-server --stdio",
+            "css" | "scss" | "less" => "vscode-css-language-server --stdio",
+            "json" => "vscode-json-language-server --stdio",
+            "yaml" | "yml" => "yaml-language-server --stdio",
+            "sh" | "bash" | "zsh" => "bash-language-server start",
+            "rb" => "solargraph stdio",
+            "md" | "mdx" => "marksman server",
+            "toml" => "taplo lsp stdio",
             _ => return,
         };
         let root = std::path::Path::new(file_path).parent()

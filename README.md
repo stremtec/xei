@@ -5,7 +5,9 @@
 ![](xei.png)
 
 ```bash
-npm install -g xei-editor
+npm install -g xei-editor       # npm
+brew install stremtec/xei/xei   # Homebrew
+cargo install xei               # Cargo
 ```
 
 ## Usage

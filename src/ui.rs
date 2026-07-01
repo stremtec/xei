@@ -134,12 +134,19 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
     let selection = app.selected_range();
     let ext = app.file_extension();
 
-    let visible_lines: Vec<(usize, &String)> = all_lines
-        .iter()
-        .enumerate()
-        .skip(scroll)
-        .take(visible_height)
-        .collect();
+    let mut visible_lines: Vec<(usize, &String)> = Vec::new();
+    let mut wrap_height = 0;
+    let text_width = (area.width.saturating_sub(2 + LINE_NO_WIDTH)).max(1) as usize;
+
+    for (idx, line) in all_lines.iter().enumerate().skip(scroll) {
+        let vis = visual_line_width(app, idx);
+        let rows = if vis == 0 { 1 } else { (vis + text_width - 1) / text_width };
+        if wrap_height + rows > visible_height {
+            break;
+        }
+        visible_lines.push((idx, line));
+        wrap_height += rows;
+    }
 
     let lines: Vec<Line> = visible_lines
         .iter()
@@ -181,11 +188,11 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
     }
 
     if found {
-        let cursor_x = area.x + 1 + LINE_NO_WIDTH + (screen_col % text_width) as u16;
-        let cursor_y = area.y + 1 + display_row as u16;
-        if cursor_x < area.x + area.width && cursor_y < area.y + area.height {
-            f.set_cursor_position((cursor_x, cursor_y));
-        }
+        let cursor_x = (area.x + 1 + LINE_NO_WIDTH + (screen_col % text_width) as u16)
+            .min(area.x + area.width.saturating_sub(1));
+        let cursor_y = (area.y + 1 + display_row as u16)
+            .min(area.y + area.height.saturating_sub(1));
+        f.set_cursor_position((cursor_x, cursor_y));
     }
 }
 

@@ -26,6 +26,26 @@ mod xlc;
 use app::App;
 
 fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "--version" | "-V" => {
+                println!("xei {}", env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            "--help" | "-h" => {
+                println!("xei (晴) — a modern Vim-like terminal editor\n");
+                println!("Usage: xei [FILE]       Open a file for editing");
+                println!("       xei --version     Print version");
+                println!("       xei --help        Show this help\n");
+                println!("Homepage: https://github.com/stremtec/xei");
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();
@@ -33,8 +53,7 @@ fn main() -> io::Result<()> {
         prev_hook(info);
     }));
 
-    let args: Vec<String> = env::args().collect();
-    let mut app = if args.len() > 1 {
+    let mut app = if args.len() > 1 && !args[1].starts_with('-') {
         App::open_file(&args[1])
     } else {
         App::new()

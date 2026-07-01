@@ -637,6 +637,36 @@ mod tests {
     }
 
     #[test]
+    fn test_col_roundtrip_tabs() {
+        let buf = Buffer::from_string("\t\tfn main()");
+        for bc in 0..=buf.line(0).chars().count() {
+            let sc = buf.buffer_col_to_screen_col(0, bc);
+            let back = buf.screen_col_to_buffer_col(0, sc);
+            assert_eq!(back, bc, "roundtrip failed at buf_col={}", bc);
+        }
+    }
+
+    #[test]
+    fn test_col_roundtrip_spaces() {
+        let buf = Buffer::from_string("        let x = 1;");
+        for bc in 0..=buf.line(0).chars().count() {
+            let sc = buf.buffer_col_to_screen_col(0, bc);
+            let back = buf.screen_col_to_buffer_col(0, sc);
+            assert_eq!(back, bc, "roundtrip failed at buf_col={}", bc);
+        }
+    }
+
+    #[test]
+    fn test_col_roundtrip_mixed() {
+        let buf = Buffer::from_string("  \t  hello\tworld");
+        for bc in 0..=buf.line(0).chars().count() {
+            let sc = buf.buffer_col_to_screen_col(0, bc);
+            let back = buf.screen_col_to_buffer_col(0, sc);
+            assert_eq!(back, bc, "roundtrip failed at buf_col={}", bc);
+        }
+    }
+
+    #[test]
     fn test_snapshot_restore() {
         let mut buf = Buffer::from_string("hello");
         buf.cursor.col = 5;

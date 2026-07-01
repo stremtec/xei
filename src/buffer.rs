@@ -119,6 +119,18 @@ impl Buffer {
         }
     }
 
+    pub fn buffer_col_to_screen_col(&self, row: usize, buf_col: usize) -> usize {
+        let line = self.line(row);
+        let mut visual = 0;
+        for (i, ch) in line.chars().enumerate() {
+            if i >= buf_col {
+                return visual;
+            }
+            visual += if ch == '\t' { 4 - (visual % 4) } else { 1 };
+        }
+        visual
+    }
+
     pub fn screen_col_to_buffer_col(&self, row: usize, screen_col: usize) -> usize {
         let line = self.line(row);
         let mut visual = 0;
@@ -614,6 +626,14 @@ mod tests {
         assert_eq!(buf.screen_col_to_buffer_col(0, 3), 0);
         assert_eq!(buf.screen_col_to_buffer_col(0, 4), 1);
         assert_eq!(buf.screen_col_to_buffer_col(0, 5), 2);
+    }
+
+    #[test]
+    fn test_buffer_col_to_screen_col() {
+        let buf = Buffer::from_string("\thello");
+        assert_eq!(buf.buffer_col_to_screen_col(0, 0), 0);
+        assert_eq!(buf.buffer_col_to_screen_col(0, 1), 4);
+        assert_eq!(buf.buffer_col_to_screen_col(0, 5), 8);
     }
 
     #[test]

@@ -159,7 +159,8 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(paragraph, area);
 
     let cursor = app.buffer.cursor();
-    let cursor_x = area.x + 1 + LINE_NO_WIDTH + cursor.col as u16;
+    let screen_col = app.buffer.buffer_col_to_screen_col(cursor.row, cursor.col);
+    let cursor_x = area.x + 1 + LINE_NO_WIDTH + screen_col as u16;
     let cursor_y = area.y + 1 + (cursor.row.saturating_sub(scroll)) as u16;
 
     if cursor_x < area.x + area.width && cursor_y < area.y + area.height {

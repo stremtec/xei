@@ -48,7 +48,7 @@ xei script.py        # language-aware highlighting + completions
 
 `ocean` (default), `monokai`, `nord`, `solarized`, `gruvbox`, `everforest`, `sakura`.
 
-## panel
+## Panels
 
 The panel size can be adjusted using the mouse.
 

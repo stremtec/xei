@@ -54,6 +54,7 @@ pub struct App {
     pub theme: &'static Theme,
     pub xlc_height: u16,
     pub xlc_separator_y: u16,
+    pub file_mtime: Option<std::time::SystemTime>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,6 +111,7 @@ impl Default for App {
             theme: &OCEAN,
             xlc_height: 11,
             xlc_separator_y: 0,
+            file_mtime: None,
         }
     }
 }
@@ -139,6 +141,7 @@ impl App {
             ..Self::default()
         };
         app.undo_stack.push(app.buffer.snapshot());
+        app.record_mtime();
         app
     }
 
@@ -363,6 +366,7 @@ impl App {
                 self.search_matches.clear();
                 self.modified = false;
                 self.undo_stack.push(self.buffer.snapshot());
+                self.record_mtime();
                 self.message = format!("Opened: {}", path);
                 self.xlc.add_output(&format!("Opened {}", path));
             }
@@ -441,13 +445,14 @@ impl App {
     }
 
     pub fn save_file(&mut self) {
-        if let Some(path) = &self.filename {
-            match fs::write(path, self.buffer.text()) {
-            Ok(_) => {
-                self.modified = false;
-                self.message = format!("Saved: {}", path.display());
-                self.xlc.add_output(&format!("Saved: {}", path.display()));
-            }
+        if let Some(path) = self.filename.clone() {
+            match fs::write(&path, self.buffer.text()) {
+                Ok(_) => {
+                    self.modified = false;
+                    self.record_mtime();
+                    self.message = format!("Saved: {}", path.display());
+                    self.xlc.add_output(&format!("Saved: {}", path.display()));
+                }
                 Err(e) => {
                     self.message = format!("Error: {}", e);
                     self.xlc.add_output(&format!("Error: {}", e));
@@ -592,6 +597,31 @@ impl App {
             self.buffer.clamp_col();
             self.enter_normal();
             self.message = String::from("Deleted");
+        }
+    }
+
+    pub fn record_mtime(&mut self) {
+        if let Some(ref path) = self.filename {
+            self.file_mtime = std::fs::metadata(path).ok().and_then(|m| m.modified().ok());
+        }
+    }
+
+    pub fn check_external_change(&mut self) {
+        if let Some(ref path) = self.filename {
+            if let Ok(meta) = std::fs::metadata(path) {
+                if let Ok(mtime) = meta.modified() {
+                    if self.file_mtime.map_or(false, |t| t != mtime) {
+                        if let Ok(content) = std::fs::read_to_string(path) {
+                            self.buffer = Buffer::from_string(&content);
+                            self.scroll = 0;
+                            self.undo_stack.push(self.buffer.snapshot());
+                            self.modified = false;
+                            self.file_mtime = Some(mtime);
+                            self.message = String::from("Reloaded (external change)");
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -684,7 +684,9 @@ fn handle_xlc(app: &mut App, code: KeyCode) {
 fn handle_search_input(app: &mut App, code: KeyCode) {
     match code {
         KeyCode::Esc => {
-            app.close_xlc();
+            app.search_pattern = None;
+            app.search_matches.clear();
+            app.xlc.close();
             app.enter_normal();
         }
         KeyCode::Enter => {
@@ -694,22 +696,52 @@ fn handle_search_input(app: &mut App, code: KeyCode) {
             } else {
                 pattern
             };
-            app.xlc.add_output(&format!("Search: /{}/", pattern));
-            app.search_pattern = Some(pattern.clone());
-            app.perform_search();
+            if !pattern.is_empty() {
+                app.search_pattern = Some(pattern.clone());
+                app.perform_search();
+                app.message = format!("Search: /{}/  {} matches", pattern, app.search_matches.len());
+            }
             app.xlc.close();
             app.enter_normal();
-            app.message = format!("Search: /{}/  {} matches", pattern, app.search_matches.len());
         }
         KeyCode::Backspace => {
             if app.xlc.input.is_empty() || app.xlc.input == "/" {
+                app.search_pattern = None;
+                app.search_matches.clear();
                 app.xlc.close();
                 app.enter_normal();
             } else {
                 app.xlc.pop_char();
+                let pattern = app.xlc.input.trim().to_string();
+                let pattern = if pattern.starts_with('/') {
+                    pattern[1..].to_string()
+                } else {
+                    pattern
+                };
+                if !pattern.is_empty() {
+                    app.search_pattern = Some(pattern.clone());
+                    app.perform_search();
+                    app.message = format!("Search: /{}/  {} matches", pattern, app.search_matches.len());
+                } else {
+                    app.search_pattern = None;
+                    app.search_matches.clear();
+                }
             }
         }
-        KeyCode::Char(c) => app.xlc.push_char(c),
+        KeyCode::Char(c) => {
+            app.xlc.push_char(c);
+            let pattern = app.xlc.input.trim().to_string();
+            let pattern = if pattern.starts_with('/') {
+                pattern[1..].to_string()
+            } else {
+                pattern
+            };
+            if !pattern.is_empty() {
+                app.search_pattern = Some(pattern.clone());
+                app.perform_search();
+                app.message = format!("Search: /{}/  {} matches", pattern, app.search_matches.len());
+            }
+        }
         _ => {}
     }
 }

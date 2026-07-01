@@ -98,6 +98,7 @@ fn run_app(
         if !event::handle_events(app)? {
             break;
         }
+        app.check_external_change();
     }
     Ok(())
 }

@@ -162,13 +162,14 @@ impl App {
         let buffer = Buffer::from_string(&content);
         let mut app = Self {
             buffer,
-            filename: Some(abs_path),
+            filename: Some(abs_path.clone()),
             message,
             modified: false,
             ..Self::default()
         };
         app.undo_stack.push(app.buffer.snapshot());
         app.record_mtime();
+        app.lsp.auto_start(&abs_path.display().to_string());
         app
     }
 
@@ -699,6 +700,7 @@ impl App {
         });
         self.current_buffer = self.buffers.len() - 1;
         self.restore_state_from_tab();
+        self.lsp.auto_start(&abs_path.display().to_string());
         self.message = format!("Opened: {}", abs_path.display());
     }
 

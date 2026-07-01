@@ -131,6 +131,29 @@ impl LspClient {
         self.send_raw(&msg);
     }
 
+    pub fn auto_start(&mut self, file_path: &str) {
+        if self.server_running { return; }
+        let ext = std::path::Path::new(file_path).extension().and_then(|e| e.to_str()).unwrap_or("");
+        let cmd = match ext {
+            "rs" => "rust-analyzer",
+            "py" => "pyright-langserver --stdio",
+            "ts" | "tsx" | "js" | "jsx" => "typescript-language-server --stdio",
+            "c" | "h" | "cpp" | "hpp" | "cc" => "clangd",
+            "go" => "gopls",
+            _ => return,
+        };
+        let root = std::path::Path::new(file_path).parent()
+            .map(|p| p.display().to_string()).unwrap_or_default();
+        self.start(cmd, &root, file_path);
+    }
+
+    pub fn request_completion(&mut self, path: &str, row: usize, col: usize) {
+        if !self.server_running { return; }
+        let msg = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"textDocument/completion","params":{{"textDocument":{{"uri":"file://{}"}},"position":{{"line":{},"character":{}}}}}}}"#, self.next_id, path, row, col);
+        self.next_id += 1;
+        self.send_raw(&msg);
+    }
+
     fn send_raw(&mut self, msg: &str) {
         if let Some(ref mut stdin) = self.stdin {
             let header = format!("Content-Length: {}\r\n\r\n", msg.len());

@@ -52,7 +52,7 @@ fn handle_mouse(
             }
         }
         MouseEventKind::Down(MouseButton::Left) => {
-            if is_on_separator(app, column) {
+            if is_on_separator(app, column, row) {
                 return;
             }
             let pos = screen_to_buffer_clamped(app, column, row);
@@ -69,6 +69,10 @@ fn handle_mouse(
                     ResizeTarget::Terminal => {
                         let new_width = app.screen_width.saturating_sub(column).max(10).min(60);
                         app.terminal_width = new_width;
+                    }
+                    ResizeTarget::Xlc => {
+                        let new_height = app.screen_height.saturating_sub(row).saturating_sub(1).max(5).min(30);
+                        app.xlc_height = new_height;
                     }
                 }
                 return;
@@ -97,8 +101,8 @@ fn handle_mouse(
     }
 }
 
-fn is_on_separator(app: &mut App, column: u16) -> bool {
-    const HIT_MARGIN: u16 = 2;
+fn is_on_separator(app: &mut App, column: u16, row: u16) -> bool {
+    const HIT_MARGIN: u16 = 3;
 
     if app.explorer.open {
         let sep = app.explorer_separator_x;
@@ -113,6 +117,15 @@ fn is_on_separator(app: &mut App, column: u16) -> bool {
         let sep = app.terminal_separator_x;
         if column >= sep.saturating_sub(HIT_MARGIN) && column <= sep.saturating_add(HIT_MARGIN) {
             app.resize_target = Some(ResizeTarget::Terminal);
+            app.mouse.dragging = false;
+            return true;
+        }
+    }
+
+    if app.xlc.open {
+        let sep = app.xlc_separator_y;
+        if row >= sep.saturating_sub(HIT_MARGIN) && row <= sep.saturating_add(HIT_MARGIN) {
+            app.resize_target = Some(ResizeTarget::Xlc);
             app.mouse.dragging = false;
             return true;
         }

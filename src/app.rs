@@ -50,13 +50,17 @@ pub struct App {
     pub explorer_separator_x: u16,
     pub terminal_separator_x: u16,
     pub screen_width: u16,
+    pub screen_height: u16,
     pub theme: &'static Theme,
+    pub xlc_height: u16,
+    pub xlc_separator_y: u16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResizeTarget {
     Explorer,
     Terminal,
+    Xlc,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -102,7 +106,10 @@ impl Default for App {
             explorer_separator_x: 0,
             terminal_separator_x: 0,
             screen_width: 80,
+            screen_height: 24,
             theme: &OCEAN,
+            xlc_height: 11,
+            xlc_separator_y: 0,
         }
     }
 }

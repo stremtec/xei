@@ -39,10 +39,21 @@ xei script.py        # language-aware highlighting + completions
 
 | Command | Action |
 |---|---|
-| `:w` / `:wq` / `:q` | Save / Save+quit / Quit |
-| `:e <path>` | Open file |
+| `:w` , `:save` | Save file |
+| `:w <path>` | Save as new path |
+| `:e <file>` , `:open <file>` | Open file |
+| `:q` , `:quit` | Quit (warns if unsaved) |
+| `:q!` , `:quit!` | Force quit |
+| `:wq` , `:x` | Save and quit |
+| `:mv <dest>` , `:move <dest>` | Move/rename file |
+| `:rename <name>` | Rename in same directory |
+| `:rm` | Delete current file |
+| `:pwd` | Show working directory |
+| `:ls` | List files |
+| `/pattern` , `:find <pat>` | Search in buffer |
+| `:theme` | List themes |
 | `:theme <name>` | Switch theme |
-| `:help` | List all commands |
+| `:help` , `:h` , `:?` | Show all commands |
 
 ## Themes
 

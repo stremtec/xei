@@ -9,7 +9,6 @@ use ratatui::{
 use crate::app::{App, EditorViewport, Mode};
 use crate::highlight;
 
-const XLC_HEIGHT: u16 = 8;
 const LINE_NO_WIDTH: u16 = 5;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
@@ -48,11 +47,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     };
 
     let editor_area = if xlc_open {
+        let xlc_total = app.xlc_height;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(XLC_HEIGHT),
-                Constraint::Length(XLC_HEIGHT + 3),
+                Constraint::Min(xlc_total),
+                Constraint::Length(xlc_total),
                 Constraint::Length(1),
             ])
             .split(main_rect);
@@ -60,6 +60,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         draw_editor(f, app, chunks[0]);
         draw_xlc(f, app, chunks[1]);
         draw_statusline(f, app, chunks[2]);
+        app.xlc_separator_y = chunks[1].y;
         chunks[0]
     } else {
         let chunks = Layout::default()
@@ -82,6 +83,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     app.screen_width = area.width;
+    app.screen_height = area.height;
     app.explorer_separator_x = if explorer_open {
         explorer_rect.x + explorer_rect.width
     } else {

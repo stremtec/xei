@@ -7,7 +7,7 @@ const { get } = require("https");
 const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
-const VERSION = "v0.2.6";
+const VERSION = "v0.2.7";
 const EXE = platform === "win32" ? ".exe" : "";
 const BIN_DIR = join(__dirname, "bin");
 const BIN_PATH = join(BIN_DIR, `xei${EXE}`);
@@ -28,10 +28,6 @@ const target = targets[key];
 if (!target) {
   console.error(`xei: unsupported platform ${platform}-${arch}`);
   process.exit(1);
-}
-
-if (existsSync(BIN_PATH)) {
-  process.exit(0);
 }
 
 const url = `https://github.com/stremtec/xei/releases/download/${VERSION}/xei-${target}${EXE}.gz`;
@@ -55,7 +51,7 @@ function onResponse(res) {
   const file = createWriteStream(BIN_PATH);
   pipeline(res, createGunzip(), file, (err) => {
     if (err) { onError(err); return; }
-    chmodSync(BIN_PATH, 0o755);
+    try { chmodSync(BIN_PATH, 0o755); } catch (_) {}
   });
 }
 

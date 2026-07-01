@@ -469,10 +469,10 @@ fn draw_xlc(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(prompt_widget, xlc_chunks[1]);
 
     let cursor_offset = if is_search { 1 } else { 2 };
-    f.set_cursor_position((
-        xlc_chunks[1].x + input_text.len() as u16 + cursor_offset,
-        xlc_chunks[1].y,
-    ));
+    let cursor_x = (xlc_chunks[1].x + input_text.len() as u16 + cursor_offset)
+        .min(xlc_chunks[1].x + xlc_chunks[1].width.saturating_sub(1));
+    let cursor_y = xlc_chunks[1].y;
+    f.set_cursor_position((cursor_x, cursor_y));
 }
 
 fn draw_terminal(f: &mut Frame, app: &App, area: Rect) {
@@ -542,7 +542,8 @@ fn draw_terminal(f: &mut Frame, app: &App, area: Rect) {
 
     let (cx, cy) = app.terminal.cursor_position();
     let offset = sb.saturating_sub(scroll);
-    let cur_y = inner.y + ((offset + cy as usize).saturating_sub(scroll)).min(inner.height.saturating_sub(1) as usize) as u16;
+    let row_offset = ((offset + cy as usize).saturating_sub(scroll)) as u16;
+    let cur_y = (inner.y + row_offset).min(inner.y + inner.height.saturating_sub(1));
     let cur_x = (inner.x + cx).min(inner.x + inner.width.saturating_sub(1));
     f.set_cursor_position((cur_x, cur_y));
 }

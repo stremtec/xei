@@ -1,6 +1,6 @@
 [package]
-name = "xei"
-version = "0.2.8"
+name = "xei-editor"
+version = "0.2.9"
 edition = "2024"
 description = "xei (晴) — a modern terminal text editor in Rust with Vim-modal editing, syntax highlighting, file explorer, built-in terminal, and theming"
 license = "MIT"
@@ -8,6 +8,10 @@ repository = "https://github.com/stremtec/xei"
 readme = "README.md"
 keywords = ["editor", "vim", "tui", "terminal", "text-editor"]
 categories = ["command-line-utilities", "text-editors"]
+
+[[bin]]
+name = "xei"
+path = "src/main.rs"
 
 [dependencies]
 crossterm = "0.28"

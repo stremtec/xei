@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="stremtec/xei"
-VERSION="${VERSION:-v0.2.8}"
+VERSION="${VERSION:-v0.2.9}"
 BIN="xei"
 
 case "$(uname -s)" in

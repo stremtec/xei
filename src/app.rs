@@ -191,6 +191,9 @@ impl App {
     pub fn push_undo(&mut self) {
         self.undo_stack.push(self.buffer.snapshot());
         self.modified = true;
+        if let Some(ref path) = self.filename {
+            self.lsp.notify_change(&path.display().to_string(), &self.buffer.text());
+        }
     }
 
     pub fn undo(&mut self) {

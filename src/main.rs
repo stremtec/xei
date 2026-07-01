@@ -101,6 +101,13 @@ fn run_app(
             break;
         }
         app.lsp.poll();
+        if let Some(loc) = app.lsp.pending_definition.take() {
+            let path_str = loc.path.clone();
+            app.open_new_tab(&path_str);
+            app.buffer.cursor.row = loc.row;
+            app.buffer.cursor.col = loc.col;
+            app.message = format!("Jumped to definition: {}:{}", path_str, loc.row + 1);
+        }
         app.check_external_change();
     }
     Ok(())

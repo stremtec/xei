@@ -11,6 +11,7 @@ pub struct LspClient {
     next_id: u64,
     pub diagnostics: Vec<Diagnostic>,
     pub server_running: bool,
+    pub pending_definition: Option<Location>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +35,13 @@ pub enum LspMessage {
 }
 
 #[derive(Debug, Clone)]
+pub struct Location {
+    pub path: String,
+    pub row: usize,
+    pub col: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct CompletionItem {
     pub label: String,
     pub detail: Option<String>,
@@ -41,7 +49,7 @@ pub struct CompletionItem {
 
 impl Default for LspClient {
     fn default() -> Self {
-        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false }
+        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, pending_definition: None }
     }
 }
 
@@ -137,6 +145,9 @@ impl LspClient {
             loop {
                 match rx.try_recv() {
                     Ok(LspMessage::Diagnostics(diags)) => self.diagnostics = diags,
+                    Ok(LspMessage::Definition { path, row, col }) => {
+                        self.pending_definition = Some(Location { path: path.display().to_string(), row, col });
+                    }
                     Ok(_msg) => {},
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => { self.server_running = false; break; }

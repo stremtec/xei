@@ -48,9 +48,9 @@ xei script.py        # language-aware highlighting + completions
 
 `ocean` (default), `monokai`, `nord`, `solarized`, `gruvbox`, `everforest`, `sakura`.
 
-##panel
+## panel
 
-'The panel size can be adjusted using the mouse.'
+The panel size can be adjusted using the mouse.
 
 ```bash
 xei :theme sakura    # switches immediately, persists to ~/.xei.toml

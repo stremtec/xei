@@ -7,10 +7,12 @@ const { get } = require("https");
 const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
-const VERSION = "v0.1.6";
+const VERSION = "v0.1.7";
 const EXE = platform === "win32" ? ".exe" : "";
 const BIN_DIR = join(__dirname, "bin");
 const BIN_PATH = join(BIN_DIR, `xei${EXE}`);
+
+try { require("fs").unlinkSync(BIN_PATH); } catch (_) {}
 
 const targets = {
   "darwin-x64": "x86_64-apple-darwin",

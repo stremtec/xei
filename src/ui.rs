@@ -163,12 +163,43 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
 
     let cursor = app.buffer.cursor();
     let screen_col = app.buffer.buffer_col_to_screen_col(cursor.row, cursor.col);
-    let cursor_x = area.x + 1 + LINE_NO_WIDTH + screen_col as u16;
-    let cursor_y = area.y + 1 + (cursor.row.saturating_sub(scroll)) as u16;
 
-    if cursor_x < area.x + area.width && cursor_y < area.y + area.height {
-        f.set_cursor_position((cursor_x, cursor_y));
+    let text_width = (area.width.saturating_sub(2 + LINE_NO_WIDTH)).max(1) as usize;
+    let mut display_row = 0usize;
+    let mut found = false;
+
+    for row in scroll..app.buffer.line_count() {
+        let visual_len = visual_line_width(app, row);
+        let line_rows = if visual_len == 0 { 1 } else { (visual_len + text_width - 1) / text_width };
+        if row == cursor.row {
+            let wrap_row = screen_col / text_width;
+            display_row += wrap_row;
+            found = true;
+            break;
+        }
+        display_row += line_rows;
     }
+
+    if found {
+        let cursor_x = area.x + 1 + LINE_NO_WIDTH + (screen_col % text_width) as u16;
+        let cursor_y = area.y + 1 + display_row as u16;
+        if cursor_x < area.x + area.width && cursor_y < area.y + area.height {
+            f.set_cursor_position((cursor_x, cursor_y));
+        }
+    }
+}
+
+fn visual_line_width(app: &App, row: usize) -> usize {
+    let line = app.buffer.line(row);
+    let mut vis = 0;
+    for ch in line.chars() {
+        vis += if ch == '\t' {
+            4 - (vis % 4)
+        } else {
+            UnicodeWidthChar::width(ch).unwrap_or(1)
+        };
+    }
+    vis
 }
 
 fn render_line_with_highlights(

@@ -7,6 +7,7 @@ use crate::buffer::{Buffer, Position};
 use crate::completion::Completions;
 use crate::config;
 use crate::explorer::Explorer;
+use crate::syntax::SyntaxEngine;
 use crate::term::Terminal;
 use crate::theme::{self, Theme, OCEAN};
 use crate::xlc::{UndoStack, Xlc, XlcCmd};
@@ -57,6 +58,7 @@ pub struct App {
     pub file_mtime: Option<std::time::SystemTime>,
     pub buffers: Vec<BufferTab>,
     pub current_buffer: usize,
+    pub syntax: SyntaxEngine,
 }
 
 #[derive(Clone)]
@@ -133,6 +135,7 @@ impl Default for App {
                 file_mtime: None,
             }],
             current_buffer: 0,
+            syntax: SyntaxEngine::new(),
         }
     }
 }

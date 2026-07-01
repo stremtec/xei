@@ -14,6 +14,11 @@ const LINE_NO_WIDTH: u16 = 5;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
+
+    let ext = app.file_extension();
+    let text = app.buffer.text();
+    app.syntax.parse(&text, ext.as_deref());
+
     let explorer_open = app.explorer.open;
     let terminal_open = app.terminal.open;
     let xlc_open = app.xlc.open;
@@ -255,7 +260,11 @@ fn render_line_with_highlights(
         return vec![Span::raw("")];
     }
 
-    let hl_tokens = highlight::highlight_line(text, ext);
+    let hl_tokens: Vec<&(highlight::TokenKind, usize, usize, usize)> = app.syntax.tokens.iter()
+        .filter(|(_, _, _, r)| *r == *row)
+        .collect();
+
+    let fallback = highlight::highlight_line(text, ext);
 
     let visual_style = Style::default()
         .bg(app.theme.selection_bg)
@@ -279,10 +288,18 @@ fn render_line_with_highlights(
 
         let mut char_style = Style::default().fg(app.theme.fg);
 
-        for &(kind, s, e) in &hl_tokens {
-            if i >= s && i < e {
-                char_style = highlight::style_for(app.theme, kind);
+        for (kind, s, e, _row) in &hl_tokens {
+            if i >= *s && i < *e {
+                char_style = highlight::style_for(app.theme, *kind);
                 break;
+            }
+        }
+        if char_style == Style::default().fg(app.theme.fg) {
+            for &(kind, s, e) in &fallback {
+                if i >= s && i < e {
+                    char_style = highlight::style_for(app.theme, kind);
+                    break;
+                }
             }
         }
 

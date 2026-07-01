@@ -19,6 +19,7 @@ mod config;
 mod event;
 mod explorer;
 mod highlight;
+mod syntax;
 mod term;
 mod theme;
 mod ui;

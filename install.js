@@ -7,15 +7,16 @@ const { get } = require("https");
 const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
-const VERSION = "v0.1.3";
+const VERSION = "v0.1.4";
 const BIN_DIR = join(__dirname, "bin");
-const BIN_PATH = join(BIN_DIR, "xei");
+const BIN_PATH = join(BIN_DIR, `xei${EXE}`);
 
 const targets = {
   "darwin-x64": "x86_64-apple-darwin",
   "darwin-arm64": "aarch64-apple-darwin",
   "linux-x64": "x86_64-unknown-linux-gnu",
   "linux-arm64": "aarch64-unknown-linux-gnu",
+  "win32-x64": "x86_64-pc-windows-gnu",
 };
 
 const key = `${platform}-${arch}`;
@@ -30,7 +31,8 @@ if (existsSync(BIN_PATH)) {
   process.exit(0);
 }
 
-const url = `https://github.com/stremtec/xei/releases/download/${VERSION}/xei-${target}.gz`;
+const EXE = platform === "win32" ? ".exe" : "";
+const url = `https://github.com/stremtec/xei/releases/download/${VERSION}/xei-${target}${EXE}.gz`;
 
 mkdirSync(BIN_DIR, { recursive: true });
 

@@ -31,7 +31,7 @@ xei script.py        # language-aware highlighting + completions
 | `Esc` | Insert / Visual | Return to Normal |
 | `Ctrl+A` | Insert | Autocomplete |
 | `Ctrl+F` | — | Toggle file explorer |
-| `F12` | — | Toggle built-in terminal |
+| `F12` , `Ctrl+T`| — | Toggle built-in terminal |
 
 ## XLC Commands (`:`)
 

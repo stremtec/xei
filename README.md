@@ -2,6 +2,8 @@
 
 > A modern Vim-like terminal editor in Rust.
 
+![](xei.png)
+
 ```bash
 npm install -g xei-editor
 ```

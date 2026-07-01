@@ -540,28 +540,56 @@ impl App {
     pub fn delete_selection(&mut self) {
         if let Some((start, end)) = self.selected_range() {
             self.push_undo();
-            let mut deleted_lines: Vec<String> = Vec::new();
+            let mut deleted_text = String::new();
 
             if self.mode == Mode::VisualLine {
                 self.buffer.cursor.row = start.row;
                 let count = end.row - start.row + 1;
                 for _ in 0..count {
                     let line = self.buffer.delete_line();
-                    deleted_lines.push(line);
+                    if !deleted_text.is_empty() { deleted_text.push('\n'); }
+                    deleted_text.push_str(&line);
                 }
-                self.yank_buffer = Some(deleted_lines.join("\n"));
+                self.yank_buffer = Some(deleted_text);
                 self.enter_normal();
                 self.message = String::from("Deleted");
                 return;
             }
 
-            let start_line = self.buffer.line(start.row).to_string();
-            let prefix: String = start_line.chars().take(start.col).collect();
-            let suffix: String = start_line.chars().skip(end.col).collect();
-            self.buffer.set_line(start.row, prefix + &suffix);
+            if start.row == end.row {
+                let line = self.buffer.line(start.row);
+                let deleted: String = line.chars().skip(start.col).take(end.col - start.col).collect();
+                let prefix: String = line.chars().take(start.col).collect();
+                let suffix: String = line.chars().skip(end.col).collect();
+                self.buffer.set_line(start.row, prefix + &suffix);
+                deleted_text = deleted;
+            } else {
+                let first_line = self.buffer.line(start.row).to_string();
+                let last_line = self.buffer.line(end.row).to_string();
+
+                deleted_text.push_str(&first_line[start.col..]);
+                for row in (start.row + 1)..end.row {
+                    deleted_text.push('\n');
+                    deleted_text.push_str(self.buffer.line(row));
+                }
+                deleted_text.push('\n');
+                deleted_text.push_str(&last_line[..end.col.min(last_line.chars().count())]);
+
+                let first_prefix: String = first_line.chars().take(start.col).collect();
+                let last_suffix: String = last_line.chars().skip(end.col).collect();
+
+                self.buffer.cursor.row = end.row;
+                for _row in (start.row + 1..=end.row).rev() {
+                    self.buffer.cursor.row = _row;
+                    self.buffer.delete_line();
+                }
+                self.buffer.cursor.row = start.row;
+                self.buffer.set_line(start.row, first_prefix + &last_suffix);
+            }
+
+            self.yank_buffer = Some(deleted_text);
             self.buffer.cursor = Position::new(start.row, start.col);
             self.buffer.clamp_col();
-            self.yank_buffer = Some(String::from(""));
             self.enter_normal();
             self.message = String::from("Deleted");
         }

@@ -7,7 +7,8 @@ const { get } = require("https");
 const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
-const VERSION = "v0.1.5";
+const VERSION = "v0.1.6";
+const EXE = platform === "win32" ? ".exe" : "";
 const BIN_DIR = join(__dirname, "bin");
 const BIN_PATH = join(BIN_DIR, `xei${EXE}`);
 
@@ -31,7 +32,6 @@ if (existsSync(BIN_PATH)) {
   process.exit(0);
 }
 
-const EXE = platform === "win32" ? ".exe" : "";
 const url = `https://github.com/stremtec/xei/releases/download/${VERSION}/xei-${target}${EXE}.gz`;
 
 mkdirSync(BIN_DIR, { recursive: true });

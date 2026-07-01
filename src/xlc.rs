@@ -160,7 +160,7 @@ fn parse_command(input: &str) -> XlcCmd {
         "find" | "/" if !arg.is_empty() => XlcCmd::Search(arg.to_string()),
         "theme" => XlcCmd::Theme(arg.to_string()),
         "bd" => XlcCmd::BufDelete,
-        "lsp" if !arg.is_empty() => XlcCmd::LspStart(arg.to_string()),
+        "lsp" | "LspStart" if !arg.is_empty() => XlcCmd::LspStart(arg.to_string()),
         _ => XlcCmd::None,
     }
 }

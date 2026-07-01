@@ -7,7 +7,11 @@
 ```bash
 npm install -g xei-editor       # npm
 brew install stremtec/xei/xei   # Homebrew
-cargo install xei               # Cargo
+```
+
+**From source (Cargo):**
+```bash
+cargo install --git https://github.com/stremtec/xei
 ```
 
 **Windows (PowerShell):**

@@ -1,7 +1,7 @@
 # xei Windows installer — run in PowerShell
 # iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
 
-$VERSION = "v0.6.0"
+$VERSION = "v2.3.0"
 $REPO = "stremtec/xei"
 $TARGET = "x86_64-pc-windows-gnu"
 $BIN = "xei.exe"
@@ -16,7 +16,6 @@ New-Item -ItemType Directory -Force -Path $DEST | Out-Null
 $gz = "$env:TEMP\xei.exe.gz"
 Invoke-WebRequest -Uri $URL -OutFile $gz
 
-# Decompress
 $fs = [System.IO.File]::OpenRead($gz)
 $gs = New-Object System.IO.Compression.GzipStream($fs, [System.IO.Compression.CompressionMode]::Decompress)
 $out = [System.IO.File]::Create("$DEST\$BIN")
@@ -25,8 +24,8 @@ $gs.Close(); $out.Close(); $fs.Close()
 Remove-Item $gz
 
 Write-Host "✓ xei installed to $DEST\$BIN" -ForegroundColor Green
+Write-Host "  suisei (desktop) is not available on Windows — run xei for the TUI editor" -ForegroundColor Yellow
 
-# Add to PATH
 $path = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($path -notlike "*$DEST*") {
     [Environment]::SetEnvironmentVariable("Path", "$path;$DEST", "User")

@@ -1,6 +1,6 @@
 [package]
 name = "xei-editor"
-version = "2.2.0"
+version = "2.3.0"
 edition = "2024"
 description = "xei (晴) — a modern terminal text editor in Rust with Vim-modal editing, syntax highlighting, file explorer, built-in terminal, and theming"
 license = "MIT"
@@ -20,10 +20,12 @@ path = "src/bin/suisei.rs"
 [dependencies]
 crossterm = "0.28"
 ratatui = "0.29"
-gpui = "0.2"
 unicode-width = "0.2"
 tree-sitter = "0.24"
 tree-sitter-rust = "0.23"
 tree-sitter-python = "0.23"
 tree-sitter-javascript = "0.23"
 tree-sitter-c = "0.23"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+gpui = "0.2"

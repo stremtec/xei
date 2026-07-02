@@ -18,6 +18,7 @@ mod completion;
 mod config;
 mod event;
 mod explorer;
+#[cfg(target_os = "macos")]
 mod gui;
 mod highlight;
 mod lsp;
@@ -49,8 +50,15 @@ fn main() -> io::Result<()> {
                 return Ok(());
             }
             "--desktop" => {
-                let file = args.get(2).cloned();
-                gui::run_desktop(file);
+                #[cfg(target_os = "macos")]
+                {
+                    let file = args.get(2).cloned();
+                    gui::run_desktop(file);
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    eprintln!("suisei desktop editor is only available on macOS");
+                }
                 return Ok(());
             }
             _ => {}

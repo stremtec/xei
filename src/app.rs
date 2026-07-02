@@ -743,6 +743,7 @@ impl App {
     }
 
     pub fn close_current_tab(&mut self) {
+        self.lsp.shutdown();
         if self.buffers.len() <= 1 {
             self.buffer = Buffer::new();
             self.filename = None;

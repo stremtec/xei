@@ -39,7 +39,6 @@ pub enum LspMessage {
     Definition { path: PathBuf, row: usize, col: usize },
     Completions(Vec<CompletionItem>),
     InitResponse,
-    Log(String),
 }
 
 #[derive(Debug, Clone)]
@@ -143,7 +142,6 @@ impl LspClient {
     }
 
     pub fn auto_start(&mut self, file_path: &str) {
-        if self.server_running { return; }
         let ext = std::path::Path::new(file_path).extension().and_then(|e| e.to_str()).unwrap_or("");
         let cmd = match ext {
             "rs" => "rust-analyzer",
@@ -162,9 +160,14 @@ impl LspClient {
             "toml" => "taplo lsp stdio",
             _ => return,
         };
+
+        if self.server_running && self.server_lang == ext { return; }
+        if self.server_running { self.shutdown(); }
+
         let root = std::path::Path::new(file_path).parent()
             .map(|p| p.display().to_string()).unwrap_or_default();
         self.start(cmd, &root, file_path);
+        self.server_lang = ext.to_string();
         if !self.server_running {
             self.error = Some(format!("{} not found. Install it or set manually with :LspStart", cmd));
         }

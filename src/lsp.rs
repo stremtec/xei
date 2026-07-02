@@ -121,7 +121,8 @@ impl LspClient {
         let escaped = escape_json(&std::fs::read_to_string(file_path).unwrap_or_default());
         let lang = lang_id(file_path);
         self.pending_didopen = Some((file_path.to_string(), lang.to_string(), escaped));
-        self.server_running = true;
+
+        // server_running = true after init response, not here
     }
 
     pub fn notify_change(&mut self, path: &str, text: &str) {
@@ -193,6 +194,7 @@ impl LspClient {
                     Ok(LspMessage::InitResponse) => {
                         if !self.initialized {
                             self.initialized = true;
+                            self.server_running = true;
                         }
                     }
                     Ok(LspMessage::Definition { path, row, col }) => {

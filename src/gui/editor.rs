@@ -138,13 +138,19 @@ impl Suisei {
             "p"=>{if let Some(ref yb)=self.app.yank_buffer.clone(){self.app.buffer.paste_line_after(yb);self.rp();self.notify(cx);}}
             ":"=>{self.app.mode=Mode::XlcInput;self.app.xlc.open_panel(None);self.notify(cx);}
             "/"=>{self.app.mode=Mode::XlcInput;self.app.xlc.open_panel(Some("/"));self.notify(cx);}
-            "ctrl-f"|"f5"=>{self.app.explorer.toggle(self.app.filename.as_ref());self.notify(cx);}
-            "ctrl-t"|"f12"=>{
-                if self.app.terminal.open { self.app.terminal.shutdown(); self.app.terminal.open=false; }
-                else { self.app.terminal.open=true; self.app.terminal.start(self.app.filename.as_ref()); }
-                self.notify(cx);
+            _ => {
+                if e.keystroke.modifiers.control {
+                    match e.keystroke.key.as_str() {
+                        "f" => { self.app.explorer.toggle(self.app.filename.as_ref()); self.notify(cx); }
+                        "t" => {
+                            if self.app.terminal.open { self.app.terminal.shutdown(); self.app.terminal.open = false; }
+                            else { self.app.terminal.open = true; self.app.terminal.start(self.app.filename.as_ref()); }
+                            self.notify(cx);
+                        }
+                        _ => {}
+                    }
+                }
             }
-            _ => {}
         }
     }
 
@@ -155,6 +161,10 @@ impl Suisei {
             "backspace"=>{self.app.buffer.backspace();self.rp();self.app.update_scroll();self.notify(cx);}
             "return"|"enter"=>{self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.update_scroll();self.notify(cx);}
             "tab"=>{for _ in 0..4{self.app.buffer.insert_char(' ');}self.rp();self.app.update_scroll();self.notify(cx);}
+            "left"=>{self.app.buffer.move_left();self.app.update_scroll();self.notify(cx);}
+            "right"=>{self.app.buffer.move_right();self.app.update_scroll();self.notify(cx);}
+            "up"=>{self.app.buffer.move_up();self.app.update_scroll();self.notify(cx);}
+            "down"=>{self.app.buffer.move_down();self.app.update_scroll();self.notify(cx);}
             _ => { if let Some(ch)=&e.keystroke.key_char { if !ch.is_empty()&&ch!="\u{7f}" { for c in ch.chars(){self.app.buffer.insert_char(c);} self.rp();self.app.update_scroll();self.notify(cx); } } }
         }
     }

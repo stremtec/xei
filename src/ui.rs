@@ -259,103 +259,85 @@ fn render_line_with_highlights(
 ) -> Vec<Span<'static>> {
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
-
-    if len == 0 {
-        return vec![Span::raw("")];
-    }
+    if len == 0 { return vec![Span::raw("")]; }
 
     let hl_tokens: Vec<&(highlight::TokenKind, usize, usize, usize)> = app.syntax.tokens.iter()
-        .filter(|(_, _, _, r)| *r == *row)
-        .collect();
-
+        .filter(|(_, _, _, r)| *r == *row).collect();
     let fallback = highlight::highlight_line(text, ext);
+    let row_diags: Vec<&crate::lsp::Diagnostic> = app.lsp.diagnostics.iter()
+        .filter(|d| d.row == *row).collect();
 
-    let visual_style = Style::default()
-        .bg(app.theme.selection_bg)
-        .add_modifier(Modifier::BOLD);
-    let search_style = Style::default()
-        .bg(app.theme.search_bg)
-        .add_modifier(Modifier::BOLD);
+    let visual_style = Style::default().bg(app.theme.selection_bg).add_modifier(Modifier::BOLD);
+    let search_style = Style::default().bg(app.theme.search_bg).add_modifier(Modifier::BOLD);
 
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut vis_col = 0usize;
+    let mut run_style = Style::default().fg(app.theme.fg);
+    let mut run_text = String::new();
+
+    let flush = |spans: &mut Vec<Span<'static>>, text: &mut String, style: &mut Style, new_style: Style| {
+        if !text.is_empty() && *style != new_style {
+            spans.push(Span::styled(std::mem::take(text), *style));
+        }
+        if *style != new_style {
+            *style = new_style;
+        }
+    };
 
     for i in 0..len {
         let ch = chars[i];
-        let char_str = if ch == '\t' {
-            let spaces = 4 - (vis_col % 4);
-            " ".repeat(spaces)
-        } else {
-            ch.to_string()
-        };
-        let char_width = if ch == '\t' {
-            char_str.chars().count()
-        } else {
-            UnicodeWidthChar::width(ch).unwrap_or(1)
-        };
+        let char_str = if ch == '\t' { " ".repeat(4 - (vis_col % 4)) } else { ch.to_string() };
+        let char_width = if ch == '\t' { char_str.chars().count() } else { UnicodeWidthChar::width(ch).unwrap_or(1) };
 
-        let mut char_style = Style::default().fg(app.theme.fg);
-        let base_style = char_style;
+        let mut s = Style::default().fg(app.theme.fg);
 
-        for (kind, s, e, _row) in &hl_tokens {
-            if i >= *s && i < *e {
-                char_style = highlight::style_for(app.theme, *kind);
-                break;
-            }
-        }
-        if char_style == Style::default().fg(app.theme.fg) {
-            for &(kind, s, e) in &fallback {
-                if i >= s && i < e {
-                    char_style = highlight::style_for(app.theme, kind);
-                    break;
-                }
-            }
+        for (kind, st, ed, _) in &hl_tokens { if i >= *st && i < *ed { s = highlight::style_for(app.theme, *kind); break; } }
+        if s == Style::default().fg(app.theme.fg) {
+            for &(kind, st, ed) in &fallback { if i >= st && i < ed { s = highlight::style_for(app.theme, kind); break; } }
         }
 
         if let Some((start, end)) = selection {
-            if app.mode == Mode::VisualLine {
-                if *row >= start.row && *row <= end.row {
-                    char_style = visual_style;
-                }
-            } else if *row >= start.row && *row <= end.row {
-                let line_start = if *row == start.row { start.col } else { 0 };
-                let line_end = if *row == end.row { end.col } else { len };
-                if i >= line_start && i < line_end {
-                    char_style = visual_style;
-                }
+            if app.mode == Mode::VisualLine { if *row >= start.row && *row <= end.row { s = visual_style; } }
+            else if *row >= start.row && *row <= end.row {
+                let ls = if *row == start.row { start.col } else { 0 };
+                let le = if *row == end.row { end.col } else { len };
+                if i >= ls && i < le { s = visual_style; }
             }
         }
 
-        if char_style == base_style {
-            if let Some(ref pattern) = app.search_pattern {
-                if !pattern.is_empty() {
+        if s == Style::default().fg(app.theme.fg) {
+            if let Some(ref pat) = app.search_pattern {
+                if !pat.is_empty() {
                     for pos in &app.search_matches {
-                        if pos.row == *row && i >= pos.col && i < pos.col + pattern.len() {
-                            char_style = search_style;
-                            break;
-                        }
+                        if pos.row == *row && i >= pos.col && i < pos.col + pat.len() { s = search_style; break; }
                     }
                 }
             }
         }
 
-        for diag in &app.lsp.diagnostics {
-            if diag.row == *row && i >= diag.col_start && i < diag.col_end {
-                char_style = match diag.severity {
-                    crate::lsp::DiagnosticSeverity::Error => char_style
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::UNDERLINED),
-                    crate::lsp::DiagnosticSeverity::Warning => char_style
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::UNDERLINED),
-                    _ => char_style,
+        for diag in &row_diags {
+            if i >= diag.col_start && i < diag.col_end {
+                s = match diag.severity {
+                    crate::lsp::DiagnosticSeverity::Error => s.fg(Color::Red).add_modifier(Modifier::UNDERLINED),
+                    crate::lsp::DiagnosticSeverity::Warning => s.fg(Color::Yellow).add_modifier(Modifier::UNDERLINED),
+                    _ => s,
                 };
                 break;
             }
         }
 
-        spans.push(Span::styled(char_str, char_style));
+        if s != run_style && !run_text.is_empty() {
+            spans.push(Span::styled(std::mem::take(&mut run_text), run_style));
+            run_style = s;
+        } else if run_style != s {
+            run_style = s;
+        }
+        run_text.push_str(&char_str);
         vis_col += char_width;
+    }
+
+    if !run_text.is_empty() {
+        spans.push(Span::styled(run_text, run_style));
     }
 
     spans

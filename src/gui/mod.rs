@@ -1,0 +1,26 @@
+pub mod editor;
+
+use gpui::*;
+
+pub fn run_gui(file_path: Option<String>) {
+    Application::new().run(move |cx: &mut App| {
+        cx.open_window(
+            WindowOptions {
+                titlebar: Some(TitlebarOptions {
+                    title: Some("xei (晴)".into()),
+                    ..Default::default()
+                }),
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(1200.), px(800.)),
+                    cx,
+                ))),
+                ..Default::default()
+            },
+            |_window, cx| {
+                cx.new(|cx| editor::GuiEditor::new(cx, file_path))
+            },
+        )
+        .unwrap();
+    });
+}

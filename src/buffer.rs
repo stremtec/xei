@@ -662,11 +662,11 @@ mod tests {
 
     #[test]
     fn test_col_roundtrip_cjk() {
-        let buf = Buffer::from_string("안녕하세요");
+        let buf = Buffer::from_string("야르~");
         for bc in 0..=buf.line(0).chars().count() {
             let sc = buf.buffer_col_to_screen_col(0, bc);
             let back = buf.screen_col_to_buffer_col(0, sc);
-            assert_eq!(back, bc, "roundtrip failed at buf_col={} for '안녕하세요'", bc);
+            assert_eq!(back, bc, "roundtrip failed at buf_col={} for '야르~'", bc);
         }
     }
 

@@ -287,6 +287,7 @@ fn render_line_with_highlights(
         let char_width = UnicodeWidthChar::width(ch).unwrap_or(1);
 
         let mut char_style = Style::default().fg(app.theme.fg);
+        let base_style = char_style;
 
         for (kind, s, e, _row) in &hl_tokens {
             if i >= *s && i < *e {
@@ -317,7 +318,7 @@ fn render_line_with_highlights(
             }
         }
 
-        if char_style == Style::default() {
+        if char_style == base_style {
             if let Some(ref pattern) = app.search_pattern {
                 if !pattern.is_empty() {
                     for pos in &app.search_matches {
@@ -330,7 +331,7 @@ fn render_line_with_highlights(
             }
         }
 
-        if char_style == Style::default() {
+        if char_style == base_style {
             for diag in &app.lsp.diagnostics {
                 if diag.row == *row && i >= diag.col_start && i < diag.col_end {
                     char_style = match diag.severity {

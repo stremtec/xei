@@ -501,11 +501,11 @@ impl App {
 
     pub fn update_scroll(&mut self) {
         let cursor_row = self.buffer.cursor.row;
-        let visible_height = 20;
+        let visible_height = self.viewport.height.max(1) as usize;
         if cursor_row < self.scroll {
             self.scroll = cursor_row;
         } else if cursor_row >= self.scroll + visible_height {
-            self.scroll = cursor_row - visible_height + 1;
+            self.scroll = cursor_row.saturating_sub(visible_height) + 1;
         }
     }
 

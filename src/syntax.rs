@@ -8,6 +8,7 @@ pub struct SyntaxEngine {
     javascript: Parser,
     c: Parser,
     tree: Option<Tree>,
+    last_ext: String,
     pub tokens: Vec<(TokenKind, usize, usize, usize)>,
 }
 
@@ -25,7 +26,7 @@ impl Default for SyntaxEngine {
         let mut c = Parser::new();
         c.set_language(&tree_sitter_c::LANGUAGE.into()).ok();
 
-            Self { rust, python, javascript, c, tree: None, tokens: Vec::new() }
+            Self { rust, python, javascript, c, tree: None, last_ext: String::new(), tokens: Vec::new() }
     }
 }
 
@@ -38,10 +39,13 @@ impl SyntaxEngine {
             Some("py") => &mut self.python,
             Some("js" | "jsx" | "ts" | "tsx" | "mjs") => &mut self.javascript,
             Some("c" | "h" | "cpp" | "hpp" | "cc") => &mut self.c,
-            _ => { self.tokens.clear(); return; }
+            _ => { self.tokens.clear(); self.last_ext.clear(); return; }
         };
 
-        self.tree = parser.parse(text, self.tree.as_ref());
+        let ext_str = ext.unwrap_or("");
+        let old = if self.last_ext == ext_str { self.tree.as_ref() } else { None };
+        self.last_ext = ext_str.to_string();
+        self.tree = parser.parse(text, old);
         self.tokens.clear();
 
         if let Some(ref tree) = self.tree {

@@ -347,7 +347,8 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('O') => {
             let row = app.buffer.cursor.row;
-            app.buffer.insert_line_at(row, String::new());
+            let indent = app.buffer.leading_indent(row);
+            app.buffer.insert_line_at(row, indent);
             app.enter_insert();
         }
         KeyCode::Char('x') => {
@@ -429,6 +430,7 @@ fn handle_insert(app: &mut App, code: KeyCode) {
                     || trimmed.ends_with("->");
                 let ends_close = trimmed.ends_with(')') || trimmed.ends_with(']');
                 app.buffer.insert_newline_with_indent(ends_block && !ends_close);
+                app.update_scroll();
             }
         }
         KeyCode::Tab => {
@@ -448,16 +450,19 @@ fn handle_insert(app: &mut App, code: KeyCode) {
         KeyCode::Left => {
             app.completions.deactivate();
             app.buffer.move_left();
+            app.update_scroll();
         }
         KeyCode::Right => {
             app.completions.deactivate();
             app.buffer.move_right();
+            app.update_scroll();
         }
         KeyCode::Up => {
             if app.completions.active {
                 app.completions.prev();
             } else {
                 app.buffer.move_up();
+                app.update_scroll();
             }
         }
         KeyCode::Down => {
@@ -465,6 +470,7 @@ fn handle_insert(app: &mut App, code: KeyCode) {
                 app.completions.next();
             } else {
                 app.buffer.move_down();
+                app.update_scroll();
             }
         }
         KeyCode::Backspace => {
@@ -543,6 +549,7 @@ fn handle_insert(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char(c) => {
             app.buffer.insert_char(c);
+            app.update_scroll();
             auto_trigger_completion(app, c);
         }
         _ => {

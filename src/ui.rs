@@ -417,7 +417,8 @@ fn draw_completions(f: &mut Frame, app: &App, area: Rect) {
     let popup_width = (max_label + max_detail + 6).min(60).max(16) as u16;
 
     let cursor = app.buffer.cursor();
-    let cursor_x = area.x + 1 + LINE_NO_WIDTH + cursor.col as u16;
+    let screen_col = app.buffer.buffer_col_to_screen_col(cursor.row, cursor.col);
+    let cursor_x = area.x + 1 + LINE_NO_WIDTH + screen_col as u16;
     let cursor_y = area.y + 1 + (cursor.row.saturating_sub(app.scroll)) as u16;
 
     let popup_x = cursor_x.min(

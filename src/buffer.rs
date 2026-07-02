@@ -81,7 +81,7 @@ impl Buffer {
     }
 
     pub fn move_right(&mut self) {
-        let max = self.current_line_len().saturating_sub(0);
+        let max = self.current_line_len();
         if self.cursor.col < max {
             self.cursor.col += 1;
         }

@@ -114,12 +114,11 @@ impl LspClient {
         self._child = Some(child);
         self.server_name = parts[0].to_string();
 
-        let init = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"initialize","params":{{"processId":null,"rootUri":"file://{}","capabilities":{{}}}}}}"#, self.next_id, root);
+        let init = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"initialize","params":{{"processId":null,"rootUri":"{}","capabilities":{{}}}}}}"#, self.next_id, file_uri(root));
         self.next_id += 1;
         self.send_raw(&init);
 
-        let escaped = std::fs::read_to_string(file_path).unwrap_or_default()
-            .replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+        let escaped = escape_json(&std::fs::read_to_string(file_path).unwrap_or_default());
         let lang = lang_id(file_path);
         self.pending_didopen = Some((file_path.to_string(), lang.to_string(), escaped));
         self.server_running = true;
@@ -127,14 +126,15 @@ impl LspClient {
 
     pub fn notify_change(&mut self, path: &str, text: &str) {
         if !self.server_running { return; }
-        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
-        let msg = format!(r#"{{"jsonrpc":"2.0","method":"textDocument/didChange","params":{{"textDocument":{{"uri":"file://{}","version":1}},"contentChanges":[{{"text":"{}"}}]}}}}"#, path, escaped);
+        let escaped = escape_json(text);
+        let msg = format!(r#"{{"jsonrpc":"2.0","method":"textDocument/didChange","params":{{"textDocument":{{"uri":"{}","version":1}},"contentChanges":[{{"text":"{}"}}]}}}}"#, file_uri(path), escaped);
         self.send_raw(&msg);
     }
 
     pub fn request_definition(&mut self, path: &str, row: usize, col: usize) {
         if !self.server_running { return; }
-        let msg = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"textDocument/definition","params":{{"textDocument":{{"uri":"file://{}"}},"position":{{"line":{},"character":{}}}}}}}"#, self.next_id, path, row, col);
+        let msg = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"textDocument/definition","params":{{"textDocument":{{"uri":"{}"}},"position":{{"line":{},"character":{}}}}}}}"#,
+            self.next_id, file_uri(path), row, col);
         self.next_id += 1;
         self.send_raw(&msg);
     }
@@ -169,7 +169,7 @@ impl LspClient {
 
     pub fn request_completion(&mut self, path: &str, row: usize, col: usize) {
         if !self.server_running { return; }
-        let msg = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"textDocument/completion","params":{{"textDocument":{{"uri":"file://{}"}},"position":{{"line":{},"character":{}}}}}}}"#, self.next_id, path, row, col);
+        let msg = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"textDocument/completion","params":{{"textDocument":{{"uri":"{}"}},"position":{{"line":{},"character":{}}}}}}}"#, self.next_id, file_uri(path), row, col);
         self.next_id += 1;
         self.send_raw(&msg);
     }
@@ -210,7 +210,7 @@ impl LspClient {
         if self.initialized {
             if let Some((path, lang, text)) = self.pending_didopen.take() {
                 self.send_raw(r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#);
-                let msg = format!(r#"{{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{{"textDocument":{{"uri":"file://{}","languageId":"{}","version":1,"text":"{}"}}}}}}"#, path, lang, text);
+                let msg = format!(r#"{{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{{"textDocument":{{"uri":"{}","languageId":"{}","version":1,"text":"{}"}}}}}}"#, file_uri(&path), lang, text);
                 self.send_raw(&msg);
             }
         }
@@ -291,6 +291,29 @@ fn extract_int(text: &str, prefix: &str) -> Option<i64> {
         let s = &text[i + prefix.len()..];
         s.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok()
     })
+}
+
+fn escape_json(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\x08' => out.push_str("\\b"),
+            '\x0C' => out.push_str("\\f"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn file_uri(path: &str) -> String {
+    let encoded = path.replace('\\', "/").replace(' ', "%20");
+    format!("file://{}", encoded)
 }
 
 fn lang_id(path: &str) -> &str {

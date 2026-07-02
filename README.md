@@ -1,6 +1,6 @@
 # xei  晴
 
-> A modern Vim-like terminal editor in Rust.
+> A modern Vim-like terminal editor in Rust with LSP, tree-sitter, and IDE features.
 
 ![](xei.png)
 
@@ -10,21 +10,41 @@ brew install stremtec/xei/xei   # Homebrew
 cargo install xei-editor        # Cargo
 ```
 
-**Windows (PowerShell):**
-```powershell
-iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
-```
-
 **macOS / Linux:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/stremtec/xei/master/install.sh | bash
 ```
 
-```bash
-xei                  # blank buffer
-xei src/main.rs      # open a file
-xei --version        # print version
+**Windows (PowerShell):**
+```powershell
+iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
 ```
+
+## Features
+
+- **LSP integration** — auto-starts language servers for 16 languages (rust-analyzer, clangd, pyright, gopls, tsserver...). Inline diagnostics, go-to-definition (`gd`), and completion
+- **Tree-sitter highlighting** — AST-based syntax for Rust, Python, JS/TS, C/C++
+- **Multi-buffer tabs** — `gt`/`gT` to switch, `:e` opens in new tab, `:bd` closes
+- **Vim modal editing** — Normal, Insert, Visual, Visual Line modes
+- **Incremental search** — live results as you type (`/`)
+- **File change detection** — auto-reload on external modification
+- **System clipboard** — `Cmd+C` / `Cmd+V` via pbcopy/pbpaste
+- **Mouse support** — click to move, drag to select, scroll, panel resize
+- **Auto-pairing** — brackets/quotes close automatically, smart indent on Enter
+- **Smart indent** — Enter copies indentation, adds extra for `{`, `[`, `(`, `:`, `=>`, `->`
+- **Panel system** — file explorer (`Ctrl+F`), built-in PTY terminal (`Ctrl+T`), XLC command bar (`:`)
+- **10 themes** — ocean, monokai, nord, solarized, gruvbox, everforest, sakura, newspaper, mono, mono_dark
+- **CJK support** — Korean, Japanese, Chinese characters render at full width
+
+## LSP
+
+Auto-detected on file open. Status bar shows `LSP: clangd (3)`.
+
+| Command | Action |
+|---|---|
+| `:LspStart <cmd>` | Manually start a language server |
+| `gd` | Go to definition |
+| `Ctrl+A` | Completions (keywords + LSP items) |
 
 ## Keybindings
 
@@ -36,100 +56,64 @@ xei --version        # print version
 | `w` `b` | Next / previous word |
 | `0` `$` | Start / end of line |
 | `gg` `G` | Top / bottom of file |
-| `i` | Enter Insert mode at cursor |
-| `a` | Enter Insert mode after cursor |
-| `A` | Enter Insert mode at end of line |
-| `o` | Open new line below, enter Insert |
-| `O` | Open new line above, enter Insert |
-| `x` | Delete character under cursor |
-| `dd` | Delete current line (yanked) |
-| `dw` | Delete current word (yanked) |
-| `p` | Paste yanked text |
+| `i` `a` `A` `o` `O` | Enter Insert mode |
+| `x` | Delete character |
+| `dd` `dw` | Delete line / word (yanked) |
+| `p` | Paste |
 | `u` | Undo |
-| `v` | Enter Visual mode |
-| `V` | Enter Visual Line mode |
-| `/` | Search forward |
-| `n` `N` | Next / previous search match |
-| `:` | Open XLC command panel |
+| `v` `V` | Visual / Visual Line |
+| `/` | Incremental search |
+| `n` `N` | Next / previous match |
+| `gt` `tt` `gT` | Next / previous tab |
+| `gd` | Go to definition (LSP) |
+| `:` | XLC command panel |
 
 ### Visual Mode
 
 | Key | Action |
 |---|---|
-| `h` `j` `k` `l` / `←↓↑→` | Extend selection |
-| `w` `b` | Jump by word |
-| `0` `$` | Start / end of line |
-| `G` | Jump to bottom |
-| `d` | Delete selection (yanked) |
-| `y` | Yank (copy) selection |
+| `d` | Delete selection |
+| `y` | Yank (copy) |
 | `Cmd+C` | Copy to system clipboard |
-| `Esc` | Return to Normal |
 
 ### Insert Mode
 
 | Key | Action |
 |---|---|
-| `Esc` | Return to Normal |
-| `←↓↑→` | Move cursor |
-| `Tab` | Insert 4 spaces (or apply completion) |
-| `Ctrl+A` | Trigger autocomplete |
+| `Ctrl+A` | Trigger autocomplete (LSP + keywords) |
 | `Cmd+V` | Paste from system clipboard |
 
 ### Panels
 
 | Key | Action |
 |---|---|
-| `Ctrl+F` | Toggle file explorer (left) |
-| `F12` | Toggle built-in terminal (right) |
-| `Ctrl+E` | Toggle XLC command panel (bottom) |
-| `Ctrl+Q` / `Esc` | Close terminal |
-
-### Explorer
-
-| Key | Action |
-|---|---|
-| `j` `k` / `↓↑` | Navigate entries |
-| `Enter` / `l` | Open file or enter directory |
-| `h` | Go to parent directory |
-| `Esc` | Return to Normal |
-
-### Mouse
-
-| Action | Behavior |
-|---|---|
-| Click | Move cursor |
-| Drag | Select text (enters Visual) |
-| Scroll | Navigate document |
-| Drag panel border | Resize explorer / terminal / XLC |
+| `Ctrl+F` | Toggle file explorer |
+| `Ctrl+T` / `F12` | Toggle built-in terminal |
+| `Ctrl+E` | Toggle XLC panel |
 
 ## XLC Commands (`:`)
 
 | Command | Action |
 |---|---|
 | `:w` `:save` | Save file |
-| `:w <path>` | Save as new path |
-| `:e <file>` `:open <file>` | Open file |
-| `:q` `:quit` | Quit (warns if unsaved) |
-| `:q!` `:quit!` | Force quit |
+| `:e <file>` | Open file (new tab if already open) |
+| `:q` / `:q!` | Quit / Force quit |
 | `:wq` `:x` | Save and quit |
-| `:mv <dest>` `:move <dest>` | Move / rename current file |
-| `:rename <name>` | Rename in same directory |
-| `:rm` | Delete current file |
-| `:pwd` | Show working directory |
-| `:ls` | List files |
-| `/pattern` `:find <pat>` | Search in buffer |
-| `:theme` | List themes |
+| `:bd` | Close current tab |
+| `:mv <dest>` | Move / rename file |
+| `:rm` | Delete file |
+| `:pwd` `:ls` | Directory info |
+| `/pattern` | Incremental search |
 | `:theme <name>` | Switch theme |
-| `:help` `:h` `:?` | Show all commands |
-
-Scroll XLC output: `Ctrl+U` / `Ctrl+D` / `PgUp` / `PgDn`
+| `:LspStart <cmd>` | Start language server |
+| `:help` | List all commands |
 
 ## Themes
 
-`ocean` (default) · `monokai` · `nord` · `solarized` · `gruvbox` · `everforest` · `sakura` · `newspaper` · `mono` · `mono_dark`
+`ocean` · `monokai` · `nord` · `solarized` · `gruvbox` · `everforest` · `sakura` · `newspaper` · `mono` · `mono_dark`
 
 ```bash
-:theme sakura    # switch immediately, persists to ~/.xei.toml
+:theme sakura    # persists to ~/.xei.toml
 ```
 
 ## Configuration

@@ -697,7 +697,11 @@ fn draw_statusline(f: &mut Frame, app: &App, area: Rect) {
         " Ln {}  Col {}  {}{}",
         cursor.row + 1,
         cursor.col + 1,
-        app.message,
+        if let Some(diag) = app.lsp.diagnostics.iter().find(|d| d.row == cursor.row) {
+            format!("  [{}] {}", if diag.severity == crate::lsp::DiagnosticSeverity::Error { "E" } else { "W" }, diag.message)
+        } else {
+            app.message.clone()
+        },
         if app.lsp.server_running { format!("  LSP: {} ({})", app.lsp.server_name, app.lsp.diagnostics.len()) } else if app.lsp.error.is_some() { "  LSP: error".to_string() } else { String::new() }
     );
 

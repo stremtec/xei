@@ -212,7 +212,6 @@ impl LspClient {
                     Ok(LspMessage::Completions(items)) => {
                         self.pending_completions = items;
                     }
-                    Ok(_msg) => {},
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => { self.server_running = false; break; }
                 }

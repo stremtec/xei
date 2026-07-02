@@ -1,15 +1,14 @@
 {
   "name": "xei-editor",
-  "version": "2.3.0",
-  "description": "xei (晴) + suisei (彗星) — Vim-modal terminal editor + native GPU desktop editor in Rust",
+  "version": "2.4.1",
+  "description": "xei (晴) — a modern Vim-modal terminal editor in Rust",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/stremtec/xei.git"
   },
   "license": "MIT",
   "bin": {
-    "xei": "bin/xei",
-    "suisei": "bin/suisei"
+    "xei": "bin/xei"
   },
   "scripts": {
     "postinstall": "node install.js"
@@ -24,9 +23,7 @@
     "tui",
     "terminal",
     "text-editor",
-    "gui",
-    "desktop",
-    "gpu",
+    "cli",
     "rust"
   ],
   "os": ["darwin", "linux", "win32"],

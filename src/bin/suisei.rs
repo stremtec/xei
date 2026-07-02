@@ -15,6 +15,10 @@ mod config;
 mod completion;
 
 #[cfg(target_os = "macos")]
+#[path = "../clipboard.rs"]
+mod clipboard;
+
+#[cfg(target_os = "macos")]
 #[path = "../explorer.rs"]
 mod explorer;
 

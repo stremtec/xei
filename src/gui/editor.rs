@@ -78,11 +78,43 @@ impl Suisei {
         // XLC input
         if self.app.mode == Mode::XlcInput { self.handle_xlc(e, cx); return; }
 
+        // Global Cmd+C/V clipboard
+        if e.keystroke.modifiers.platform {
+            match e.keystroke.key.as_str() {
+                "c" => {
+                    if self.app.mode == Mode::Visual || self.app.mode == Mode::VisualLine {
+                        self.app.yank_selection();
+                        if let Some(ref yb) = self.app.yank_buffer {
+                            crate::clipboard::copy(yb);
+                        }
+                        self.app.mode = Mode::Normal;
+                        self.nf(cx);
+                    }
+                    return;
+                }
+                "v" => {
+                    if let Some(text) = crate::clipboard::paste() {
+                        if !text.is_empty() {
+                            self.app.yank_buffer = Some(text.clone());
+                            self.app.paste();
+                            self.rp();
+                        }
+                    }
+                    self.nf(cx);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
         if let Some(px) = self.app.pending_key.take() {
             match (px, e.keystroke.key.as_str()) {
                 ('g',"g")=>{self.app.buffer.cursor.row=0;self.app.buffer.cursor.col=0;self.app.scroll=0;self.nf(cx);return;}
                 ('g',"t")=>{self.app.next_tab();self.rp();self.app.lsp_restart_for_current();self.nf(cx);return;}
                 ('g',"T")=>{self.app.prev_tab();self.rp();self.app.lsp_restart_for_current();self.nf(cx);return;}
+                ('d',"d")=>{self.app.push_undo();self.app.delete_line();self.rp();self.nf(cx);return;}
+                ('d',"w")=>{self.app.push_undo();self.app.delete_word();self.rp();self.nf(cx);return;}
+                ('y',"y")=>{self.app.yank_buffer=Some(self.app.buffer.line(self.app.buffer.cursor.row).to_string());self.app.message=String::from("Yanked");self.nf(cx);return;}
                 _=>{}
             }
         }
@@ -121,8 +153,8 @@ impl Suisei {
             "a"=>{self.app.buffer.move_right();self.app.mode=Mode::Insert;}
             "A"=>{self.app.buffer.move_to_line_end();self.app.mode=Mode::Insert;self.nf(cx);}
             "I"=>{self.app.buffer.cursor.col=0;self.app.mode=Mode::Insert;self.nf(cx);}
-            "o"=>{self.app.buffer.move_to_line_end();self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.mode=Mode::Insert;self.nf(cx);}
-            "O"=>{if self.app.buffer.cursor.row>0{self.app.buffer.cursor.row-=1;self.app.buffer.move_to_line_end();}self.app.buffer.cursor.col=0;self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.mode=Mode::Insert;self.nf(cx);}
+            "o"=>{self.app.push_undo();self.app.buffer.move_to_line_end();self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.mode=Mode::Insert;self.nf(cx);}
+            "O"=>{let row=self.app.buffer.cursor.row;let indent=self.app.buffer.leading_indent(row);self.app.push_undo();self.app.buffer.insert_line_at(row,indent);self.rp();self.app.mode=Mode::Insert;self.nf(cx);}
             "v"=>{self.app.enter_visual();self.nf(cx);}
             "V"=>{self.app.enter_visual_line();self.nf(cx);}
             "h"|"left"=>{self.app.buffer.move_left();self.app.update_scroll();self.nf(cx);}
@@ -135,9 +167,11 @@ impl Suisei {
             "b"=>{self.app.buffer.move_word_back();self.app.update_scroll();self.nf(cx);}
             "G"=>{self.app.buffer.cursor.row=self.app.buffer.line_count().saturating_sub(1);self.app.buffer.cursor.col=0;self.app.update_scroll();self.nf(cx);}
             "g"|"d"|"y"=>{self.app.pending_key=Some(k.chars().next().unwrap_or(' '));}
-            "x"=>{if self.app.buffer.cursor.col<self.app.buffer.line(self.app.buffer.cursor.row).len(){self.app.buffer.delete_char_at_cursor();}self.rp();self.nf(cx);}
+            "n"=>{self.app.search_next();self.app.update_scroll();self.nf(cx);}
+            "N"=>{self.app.search_prev();self.app.update_scroll();self.nf(cx);}
+            "x"=>{self.app.push_undo();if self.app.buffer.cursor.col<self.app.buffer.line(self.app.buffer.cursor.row).len(){self.app.buffer.delete_char_at_cursor();}self.rp();self.nf(cx);}
             "u"=>{self.app.undo();self.rp();self.nf(cx);}
-            "p"=>{if let Some(ref yb)=self.app.yank_buffer.clone(){self.app.buffer.paste_line_after(yb);self.rp();self.nf(cx);}}
+            "p"=>{self.app.paste();self.rp();self.nf(cx);}
             ":"=>{self.app.mode=Mode::XlcInput;self.app.xlc.open_panel(None);self.nf(cx);}
             "/"=>{self.app.mode=Mode::XlcInput;self.app.xlc.open_panel(Some("/"));self.nf(cx);}
             _ => {}

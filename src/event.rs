@@ -341,11 +341,13 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         KeyCode::Char('w') => app.buffer.move_word_forward(),
         KeyCode::Char('b') => app.buffer.move_word_back(),
         KeyCode::Char('o') => {
+            app.push_undo();
             app.buffer.move_to_line_end();
             app.buffer.insert_newline();
             app.enter_insert();
         }
         KeyCode::Char('O') => {
+            app.push_undo();
             let row = app.buffer.cursor.row;
             let indent = app.buffer.leading_indent(row);
             app.buffer.insert_line_at(row, indent);

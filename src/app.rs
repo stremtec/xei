@@ -547,11 +547,11 @@ impl App {
             for row in start.row..=end.row {
                 let line = self.buffer.line(row);
                 let s = if row == start.row && row == end.row {
-                    line[start.col..end.col].to_string()
+                    line[start.col..end.col + 1].to_string()
                 } else if row == start.row {
                     line[start.col..].to_string()
                 } else if row == end.row {
-                    line[..end.col].to_string()
+                    line[..end.col + 1].to_string()
                 } else {
                     line.to_string()
                 };
@@ -584,9 +584,9 @@ impl App {
 
             if start.row == end.row {
                 let line = self.buffer.line(start.row);
-                let deleted: String = line.chars().skip(start.col).take(end.col - start.col).collect();
+                let deleted: String = line.chars().skip(start.col).take(end.col - start.col + 1).collect();
                 let prefix: String = line.chars().take(start.col).collect();
-                let suffix: String = line.chars().skip(end.col).collect();
+                let suffix: String = line.chars().skip(end.col + 1).collect();
                 self.buffer.set_line(start.row, prefix + &suffix);
                 deleted_text = deleted;
             } else {
@@ -599,10 +599,10 @@ impl App {
                     deleted_text.push_str(self.buffer.line(row));
                 }
                 deleted_text.push('\n');
-                deleted_text.push_str(&last_line[..end.col.min(last_line.chars().count())]);
+                deleted_text.push_str(&last_line[..(end.col + 1).min(last_line.chars().count())]);
 
                 let first_prefix: String = first_line.chars().take(start.col).collect();
-                let last_suffix: String = last_line.chars().skip(end.col).collect();
+                let last_suffix: String = last_line.chars().skip(end.col + 1).collect();
 
                 self.buffer.cursor.row = end.row;
                 for _row in (start.row + 1..=end.row).rev() {

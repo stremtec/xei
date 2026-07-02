@@ -188,10 +188,7 @@ impl LspClient {
             loop {
                 match rx.try_recv() {
                     Ok(LspMessage::Diagnostics(diags)) => {
-                        for d in diags {
-                            self.diagnostics.retain(|x| x.row != d.row || x.col_start != d.col_start);
-                            self.diagnostics.push(d);
-                        }
+                        self.diagnostics = diags;
                     }
                     Ok(LspMessage::InitResponse) => {
                         if !self.initialized {

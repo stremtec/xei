@@ -1,6 +1,6 @@
 [package]
 name = "xei-editor"
-version = "0.17.0"
+version = "0.18.0"
 edition = "2024"
 description = "xei (晴) — a modern terminal text editor in Rust with Vim-modal editing, syntax highlighting, file explorer, built-in terminal, and theming"
 license = "MIT"

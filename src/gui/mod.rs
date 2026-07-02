@@ -11,14 +11,12 @@ pub fn run_desktop(file_path: Option<String>) {
                     ..Default::default()
                 }),
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                    None,
-                    size(px(1200.), px(800.)),
-                    cx,
+                    None, size(px(1200.), px(800.)), cx,
                 ))),
                 ..Default::default()
             },
             |_window, cx| {
-                cx.new(|cx| editor::GuiEditor::new(cx, file_path))
+                cx.new(|cx| editor::GuiSuite::new(cx, file_path))
             },
         )
         .unwrap();

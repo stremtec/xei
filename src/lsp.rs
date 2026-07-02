@@ -13,6 +13,8 @@ pub struct LspClient {
     pub server_running: bool,
     pub server_name: String,
     pub server_lang: String,
+    pub initialized: bool,
+    pending_didopen: Option<(String, String, String)>,
     pub pending_definition: Option<Location>,
     pub pending_completions: Vec<CompletionItem>,
     pub error: Option<String>,
@@ -35,6 +37,7 @@ pub enum LspMessage {
     Diagnostics(Vec<Diagnostic>),
     Definition { path: PathBuf, row: usize, col: usize },
     Completions(Vec<CompletionItem>),
+    InitResponse,
     Log(String),
 }
 
@@ -53,7 +56,7 @@ pub struct CompletionItem {
 
 impl Default for LspClient {
     fn default() -> Self {
-        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), server_lang: String::new(), pending_definition: None, pending_completions: Vec::new(), error: None }
+        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), server_lang: String::new(), initialized: false, pending_didopen: None, pending_definition: None, pending_completions: Vec::new(), error: None }
     }
 }
 
@@ -114,14 +117,11 @@ impl LspClient {
         let init = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"initialize","params":{{"processId":null,"rootUri":"file://{}","capabilities":{{}}}}}}"#, self.next_id, root);
         self.next_id += 1;
         self.send_raw(&init);
-        self.send_raw(r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#);
 
         let escaped = std::fs::read_to_string(file_path).unwrap_or_default()
             .replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
         let lang = lang_id(file_path);
-        let open = format!(r#"{{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{{"textDocument":{{"uri":"file://{}","languageId":"{}","version":1,"text":"{}"}}}}}}"#, file_path, lang, escaped);
-        self.send_raw(&open);
-
+        self.pending_didopen = Some((file_path.to_string(), lang.to_string(), escaped));
         self.server_running = true;
     }
 
@@ -193,6 +193,11 @@ impl LspClient {
                             self.diagnostics.push(d);
                         }
                     }
+                    Ok(LspMessage::InitResponse) => {
+                        if !self.initialized {
+                            self.initialized = true;
+                        }
+                    }
                     Ok(LspMessage::Definition { path, row, col }) => {
                         self.pending_definition = Some(Location { path: path.display().to_string(), row, col });
                     }
@@ -203,6 +208,13 @@ impl LspClient {
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => { self.server_running = false; break; }
                 }
+            }
+        }
+        if self.initialized {
+            if let Some((path, lang, text)) = self.pending_didopen.take() {
+                self.send_raw(r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#);
+                let msg = format!(r#"{{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{{"textDocument":{{"uri":"file://{}","languageId":"{}","version":1,"text":"{}"}}}}}}"#, path, lang, text);
+                self.send_raw(&msg);
             }
         }
     }
@@ -218,6 +230,10 @@ impl LspClient {
 
 fn parse_message(text: &str) -> Option<LspMessage> {
     let method = extract_str(text, "\"method\":\"").map(|s| s.to_string());
+
+    if text.contains("\"result\"") && text.contains("\"capabilities\"") {
+        return Some(LspMessage::InitResponse);
+    }
 
     if method.as_deref() == Some("textDocument/publishDiagnostics") {
         let mut diags = Vec::new();

@@ -284,7 +284,11 @@ fn render_line_with_highlights(
         } else {
             ch.to_string()
         };
-        let char_width = UnicodeWidthChar::width(ch).unwrap_or(1);
+        let char_width = if ch == '\t' {
+            char_str.chars().count()
+        } else {
+            UnicodeWidthChar::width(ch).unwrap_or(1)
+        };
 
         let mut char_style = Style::default().fg(app.theme.fg);
         let base_style = char_style;

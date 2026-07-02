@@ -111,6 +111,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.completions.active {
         draw_completions(f, app, area);
     }
+
+    if app.pending_key.is_some() && !app.pending_hints.is_empty() {
+        draw_pending_hints(f, app, area);
+    }
 }
 
 fn draw_tabbar(f: &mut Frame, app: &App, area: Rect) {
@@ -413,6 +417,37 @@ fn draw_explorer(f: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     f.render_widget(List::new(items), inner);
+}
+
+fn draw_pending_hints(f: &mut Frame, app: &App, area: Rect) {
+    let hints = &app.pending_hints;
+    let count = hints.len() as u16;
+    let popup_w = 30u16;
+    let popup_h = count + 2;
+
+    let cursor = app.buffer.cursor();
+    let screen_col = app.buffer.buffer_col_to_screen_col(cursor.row, cursor.col);
+    let cx = (area.x + 1 + LINE_NO_WIDTH + screen_col as u16).min(area.x + area.width.saturating_sub(popup_w));
+    let cy = (area.y + 1 + (cursor.row.saturating_sub(app.scroll)) as u16 + 1)
+        .min(area.y + area.height.saturating_sub(popup_h));
+
+    let popup = Rect { x: cx, y: cy, width: popup_w, height: popup_h };
+
+    let items: Vec<Line> = hints.iter().map(|(key, desc)| {
+        Line::from(vec![
+            Span::styled(format!(" {} ", key), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(desc.to_string(), Style::default().fg(Color::Gray)),
+        ])
+    }).collect();
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(app.theme.border))
+        .style(Style::default().bg(app.theme.completion_bg))
+        .title(Span::styled(" hints ", Style::default().fg(app.theme.border)));
+
+    f.render_widget(Clear, popup);
+    f.render_widget(Paragraph::new(items).block(block), popup);
 }
 
 fn draw_completions(f: &mut Frame, app: &App, area: Rect) {

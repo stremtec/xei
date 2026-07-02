@@ -357,12 +357,14 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('d') => {
             app.pending_key = Some('d');
+            app.pending_hints = vec![("dd", "delete line"), ("dw", "delete word")];
             app.message = String::from("-- PENDING: d --");
         }
         KeyCode::Char('p') => app.paste(),
         KeyCode::Char('u') => app.undo(),
         KeyCode::Char('t') => {
             app.pending_key = Some('t');
+            app.pending_hints = vec![("tt", "next tab"), ("tT", "previous tab")];
             app.message = String::from("-- PENDING: t --");
         }
         KeyCode::Char('n') => app.search_next(),
@@ -374,6 +376,7 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         }
         KeyCode::Char('g') => {
             app.pending_key = Some('g');
+            app.pending_hints = vec![("gg", "go to top"), ("gd", "go to def (LSP)"), ("gT", "prev tab")];
             app.message = String::from("-- PENDING: g --");
         }
         _ => {}

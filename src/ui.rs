@@ -275,15 +275,6 @@ fn render_line_with_highlights(
     let mut run_style = Style::default().fg(app.theme.fg);
     let mut run_text = String::new();
 
-    let flush = |spans: &mut Vec<Span<'static>>, text: &mut String, style: &mut Style, new_style: Style| {
-        if !text.is_empty() && *style != new_style {
-            spans.push(Span::styled(std::mem::take(text), *style));
-        }
-        if *style != new_style {
-            *style = new_style;
-        }
-    };
-
     for i in 0..len {
         let ch = chars[i];
         let char_str = if ch == '\t' { " ".repeat(4 - (vis_col % 4)) } else { ch.to_string() };

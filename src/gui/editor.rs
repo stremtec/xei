@@ -2,465 +2,380 @@ use gpui::*;
 use crate::app::{App, Mode};
 use crate::highlight::TokenKind;
 
-struct SuiteTheme {
-    bg: Hsla, fg: Hsla, gutter_bg: Hsla, gutter_fg: Hsla,
-    line_highlight: Hsla, cursor: Hsla, status_bg: Hsla, status_fg: Hsla,
-    keyword: Hsla, string: Hsla, comment: Hsla, number: Hsla, type_name: Hsla,
-    explorer_bg: Hsla, explorer_fg: Hsla, explorer_dir: Hsla,
-    tab_active: Hsla, tab_inactive: Hsla,
-    xlc_bg: Hsla, xlc_fg: Hsla,
+struct St {
+    bg: Hsla, fg: Hsla, gbg: Hsla, gfg: Hsla, hl: Hsla, cur: Hsla,
+    sbar: Hsla, sf: Hsla, kw: Hsla, st: Hsla, cm: Hsla, nm: Hsla, tn: Hsla,
+    ebg: Hsla, efg: Hsla, edr: Hsla, ta: Hsla, ti: Hsla,
+    xbg: Hsla, xfg: Hsla, sel: Hsla, err: Hsla, warn: Hsla,
+    comp_bg: Hsla, comp_sel: Hsla, comp_border: Hsla,
+    term_bg: Hsla, term_fg: Hsla,
 }
 
-impl Default for SuiteTheme {
-    fn default() -> Self {
-        SuiteTheme {
-            bg: hsla(0.65, 0.15, 0.12, 1.0),
-            fg: hsla(0.60, 0.20, 0.85, 1.0),
-            gutter_bg: hsla(0.65, 0.12, 0.10, 1.0),
-            gutter_fg: hsla(0.60, 0.10, 0.50, 1.0),
-            line_highlight: hsla(0.65, 0.15, 0.18, 1.0),
-            cursor: hsla(0.60, 0.80, 0.70, 1.0),
-            status_bg: hsla(0.65, 0.25, 0.20, 1.0),
-            status_fg: hsla(0.60, 0.15, 0.70, 1.0),
-            keyword: hsla(0.72, 0.77, 0.58, 1.0),
-            string: hsla(0.11, 0.57, 0.60, 1.0),
-            comment: hsla(0.55, 0.30, 0.45, 1.0),
-            number: hsla(0.17, 0.86, 0.60, 1.0),
-            type_name: hsla(0.28, 0.65, 0.60, 1.0),
-            explorer_bg: hsla(0.65, 0.10, 0.08, 1.0),
-            explorer_fg: hsla(0.60, 0.15, 0.70, 1.0),
-            explorer_dir: hsla(0.58, 0.60, 0.60, 1.0),
-            tab_active: hsla(0.65, 0.18, 0.18, 1.0),
-            tab_inactive: hsla(0.65, 0.10, 0.08, 1.0),
-            xlc_bg: hsla(0.65, 0.10, 0.08, 1.0),
-            xlc_fg: hsla(0.60, 0.15, 0.70, 1.0),
-        }
-    }
+impl Default for St {
+    fn default() -> Self { St {
+        bg: hsla(0.65, 0.15, 0.12, 1.0), fg: hsla(0.60, 0.20, 0.85, 1.0),
+        gbg: hsla(0.65, 0.12, 0.10, 1.0), gfg: hsla(0.60, 0.10, 0.50, 1.0),
+        hl: hsla(0.65, 0.15, 0.18, 1.0), cur: hsla(0.60, 0.80, 0.70, 1.0),
+        sbar: hsla(0.65, 0.25, 0.20, 1.0), sf: hsla(0.60, 0.15, 0.70, 1.0),
+        kw: hsla(0.72, 0.77, 0.58, 1.0), st: hsla(0.11, 0.57, 0.60, 1.0),
+        cm: hsla(0.55, 0.30, 0.45, 1.0), nm: hsla(0.17, 0.86, 0.60, 1.0),
+        tn: hsla(0.28, 0.65, 0.60, 1.0),
+        ebg: hsla(0.65, 0.10, 0.08, 1.0), efg: hsla(0.60, 0.15, 0.70, 1.0),
+        edr: hsla(0.58, 0.60, 0.60, 1.0),
+        ta: hsla(0.65, 0.18, 0.18, 1.0), ti: hsla(0.65, 0.10, 0.08, 1.0),
+        xbg: hsla(0.65, 0.10, 0.08, 1.0), xfg: hsla(0.60, 0.15, 0.70, 1.0),
+        sel: hsla(0.67, 0.35, 0.30, 1.0), err: hsla(0.0, 0.70, 0.55, 1.0),
+        warn: hsla(0.14, 0.70, 0.55, 1.0),
+        comp_bg: hsla(0.65, 0.18, 0.16, 1.0), comp_sel: hsla(0.72, 0.30, 0.30, 1.0),
+        comp_border: hsla(0.67, 0.35, 0.40, 1.0),
+        term_bg: hsla(0.65, 0.08, 0.06, 1.0), term_fg: hsla(0.60, 0.20, 0.85, 1.0),
+    }}
 }
 
-impl SuiteTheme {
-    fn color_for(&self, kind: TokenKind) -> Hsla {
-        match kind {
-            TokenKind::Keyword => self.keyword,
-            TokenKind::String => self.string,
-            TokenKind::Comment => self.comment,
-            TokenKind::Number => self.number,
-            TokenKind::TypeName => self.type_name,
-        }
-    }
+impl St {
+    fn c(&self, k: TokenKind) -> Hsla { match k { TokenKind::Keyword=>self.kw,TokenKind::String=>self.st,TokenKind::Comment=>self.cm,TokenKind::Number=>self.nm,TokenKind::TypeName=>self.tn }}
+    fn dc(&self, s: &str) -> Hsla { if s == "error" { self.err } else { self.warn }}
 }
 
-pub struct GuiSuite {
+pub struct Suisei {
     app: App,
-    theme: SuiteTheme,
+    t: St,
     ext: Option<String>,
-    focus_handle: FocusHandle,
+    fh: FocusHandle,
 }
 
-impl GuiSuite {
-    pub fn new(cx: &mut Context<Self>, file_path: Option<String>) -> Self {
-        let (mut app, ext) = if let Some(ref path) = file_path {
-            let a = App::open_file(path);
-            let ext = std::path::Path::new(path)
-                .extension().and_then(|e| e.to_str()).map(|s| s.to_string());
-            (a, ext)
-        } else {
-            (App::new(), None)
-        };
-
+impl Suisei {
+    pub fn new(cx: &mut Context<Self>, fp: Option<String>) -> Self {
+        let (mut app, ext) = if let Some(ref p) = fp {
+            let a = App::open_file(p);
+            let e = std::path::Path::new(p).extension().and_then(|e| e.to_str()).map(|s| s.to_string());
+            (a, e)
+        } else { (App::new(), None) };
         app.syntax.parse(&app.buffer.text(), ext.as_deref());
         app.explorer.refresh();
-
-        let suite = GuiSuite {
-            app,
-            theme: SuiteTheme::default(),
-            ext,
-            focus_handle: cx.focus_handle(),
-        };
-
-        suite
+        let mut s = Self { app, t: St::default(), ext, fh: cx.focus_handle() };
+        s.start_lsp(cx);
+        s
     }
 
-    fn reparse(&mut self) {
-        self.app.syntax.parse(&self.app.buffer.text(), self.ext.as_deref());
-        self.app.syntax.tokens.retain(|(_, _, _, row)| *row < self.app.buffer.line_count());
-    }
-
-    fn notify(&mut self, cx: &mut Context<Self>) {
-        cx.notify();
-    }
-
-    // ── Key handling ──────────────────────────────────────
-
-    fn on_key(&mut self, event: &KeyDownEvent, _w: &mut Window, cx: &mut Context<Self>) {
-        if self.app.mode == Mode::XlcInput {
-            self.handle_xlc_key(event, cx);
-            return;
+    fn start_lsp(&mut self, _cx: &mut Context<Self>) {
+        if let Some(ref p) = self.app.filename {
+            let path = p.display().to_string();
+            self.app.lsp.auto_start(&path);
         }
+    }
 
-        if let Some(prefix) = self.app.pending_key.take() {
-            match (prefix, event.keystroke.key.as_str()) {
-                ('g', "g") => {
-                    self.app.buffer.cursor.row = 0;
-                    self.app.buffer.cursor.col = 0;
-                    self.app.scroll = 0;
-                    self.notify(cx);
-                    return;
-                }
-                ('g', "t") => {
-                    self.app.next_tab();
-                    self.reparse();
-                    self.notify(cx);
-                    return;
-                }
-                ('g', "T") => {
-                    self.app.prev_tab();
-                    self.reparse();
-                    self.notify(cx);
-                    return;
-                }
+    fn rp(&mut self) { self.app.syntax.parse(&self.app.buffer.text(), self.ext.as_deref()); self.app.syntax.tokens.retain(|(_,_,_,r)| *r < self.app.buffer.line_count()); }
+
+    fn notify(&mut self, cx: &mut Context<Self>) { cx.notify(); }
+
+    fn is_selected(&self, row: usize, col: usize) -> bool {
+        if self.app.mode != Mode::Visual && self.app.mode != Mode::VisualLine { return false; }
+        let anchor = match self.app.visual_anchor { Some(a) => a, None => return false };
+        let cur = self.app.buffer.cursor;
+        let (sr, sc) = if anchor.row < cur.row || (anchor.row == cur.row && anchor.col <= cur.col) { (anchor.row, anchor.col) } else { (cur.row, cur.col) };
+        let (er, ec) = if anchor.row > cur.row || (anchor.row == cur.row && anchor.col > cur.col) { (anchor.row, anchor.col) } else { (cur.row, cur.col) };
+        if self.app.mode == Mode::VisualLine { row >= sr && row <= er }
+        else if row > sr && row < er { true }
+        else if row == sr && row == er { col >= sc && col <= ec }
+        else if row == sr { col >= sc }
+        else if row == er { col <= ec }
+        else { false }
+    }
+
+    fn handle_key(&mut self, e: &KeyDownEvent, _w: &mut Window, cx: &mut Context<Self>) {
+        if self.app.mode == Mode::XlcInput { self.handle_xlc(e, cx); return; }
+
+        if let Some(px) = self.app.pending_key.take() {
+            match (px, e.keystroke.key.as_str()) {
+                ('g', "g") => { self.app.buffer.cursor.row=0; self.app.buffer.cursor.col=0; self.app.scroll=0; self.notify(cx); return; }
+                ('g', "t") => { self.app.next_tab(); self.rp(); self.app.lsp_restart_for_current(); self.notify(cx); return; }
+                ('g', "T") => { self.app.prev_tab(); self.rp(); self.app.lsp_restart_for_current(); self.notify(cx); return; }
                 _ => {}
             }
         }
 
         match self.app.mode {
-            Mode::Normal => self.handle_normal(event, cx),
-            Mode::Insert => self.handle_insert(event, cx),
+            Mode::Normal => self.hn(e, cx),
+            Mode::Insert => self.hi(e, cx),
+            Mode::Visual | Mode::VisualLine => self.hv(e, cx),
             _ => {}
         }
+        // Poll LSP and terminal after every key event
+        self.app.lsp.poll();
+        if self.app.terminal.open { self.app.terminal.poll(); }
+        cx.notify();
     }
 
-    fn handle_normal(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        let k = event.keystroke.key.as_str();
+    fn hn(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
+        let k = e.keystroke.key.as_str();
         match k {
-            "i" => self.app.mode = Mode::Insert,
-            "a" => { self.app.buffer.move_right(); self.app.mode = Mode::Insert; }
-            "A" => { self.app.buffer.move_to_line_end(); self.app.mode = Mode::Insert; self.notify(cx); }
-            "I" => { self.app.buffer.cursor.col = 0; self.app.mode = Mode::Insert; self.notify(cx); }
-            "o" => { self.app.buffer.move_to_line_end(); self.app.buffer.insert_newline_with_indent(false); self.reparse(); self.app.mode = Mode::Insert; self.notify(cx); }
-            "O" => {
-                if self.app.buffer.cursor.row > 0 { self.app.buffer.cursor.row -= 1; self.app.buffer.move_to_line_end(); }
-                self.app.buffer.cursor.col = 0;
-                self.app.buffer.insert_newline_with_indent(false);
-                self.reparse(); self.app.mode = Mode::Insert; self.notify(cx);
-            }
-            "h" | "left" => { self.app.buffer.move_left(); self.app.update_scroll(); self.notify(cx); }
-            "j" | "down" => { self.app.buffer.move_down(); self.app.update_scroll(); self.notify(cx); }
-            "k" | "up" => { self.app.buffer.move_up(); self.app.update_scroll(); self.notify(cx); }
-            "l" | "right" => { self.app.buffer.move_right(); self.app.update_scroll(); self.notify(cx); }
-            "0" | "home" => { self.app.buffer.cursor.col = 0; self.notify(cx); }
-            "$" | "end" => { self.app.buffer.move_to_line_end(); self.notify(cx); }
-            "w" => { self.app.buffer.move_word_forward(); self.app.update_scroll(); self.notify(cx); }
-            "b" => { self.app.buffer.move_word_back(); self.app.update_scroll(); self.notify(cx); }
-            "G" => {
-                self.app.buffer.cursor.row = self.app.buffer.line_count().saturating_sub(1);
-                self.app.buffer.cursor.col = 0;
-                self.app.update_scroll();
-                self.notify(cx);
-            }
-            "g" | "d" => { self.app.pending_key = Some(k.chars().next().unwrap_or(' ')); }
-            "x" => { self.app.buffer.delete_char_at_cursor(); self.reparse(); self.notify(cx); }
-            "u" => { self.app.undo(); self.reparse(); self.notify(cx); }
-            "p" => {
-                if let Some(yank) = self.app.yank_buffer.clone() {
-                    self.app.buffer.paste_line_after(&yank);
-                    self.reparse(); self.notify(cx);
+            "i"=>{self.app.mode=Mode::Insert;}
+            "a"=>{self.app.buffer.move_right();self.app.mode=Mode::Insert;}
+            "A"=>{self.app.buffer.move_to_line_end();self.app.mode=Mode::Insert;self.notify(cx);}
+            "I"=>{self.app.buffer.cursor.col=0;self.app.mode=Mode::Insert;self.notify(cx);}
+            "o"=>{self.app.buffer.move_to_line_end();self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.mode=Mode::Insert;self.notify(cx);}
+            "O"=>{if self.app.buffer.cursor.row>0{self.app.buffer.cursor.row-=1;self.app.buffer.move_to_line_end();}self.app.buffer.cursor.col=0;self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.mode=Mode::Insert;self.notify(cx);}
+            "v"=>{self.app.enter_visual();self.notify(cx);}
+            "V"=>{self.app.enter_visual_line();self.notify(cx);}
+            "h"|"left"=>{self.app.buffer.move_left();self.app.update_scroll();self.notify(cx);}
+            "j"|"down"=>{self.app.buffer.move_down();self.app.update_scroll();self.notify(cx);}
+            "k"|"up"=>{self.app.buffer.move_up();self.app.update_scroll();self.notify(cx);}
+            "l"|"right"=>{self.app.buffer.move_right();self.app.update_scroll();self.notify(cx);}
+            "0"|"home"=>{self.app.buffer.cursor.col=0;self.notify(cx);}
+            "$"|"end"=>{self.app.buffer.move_to_line_end();self.notify(cx);}
+            "w"=>{self.app.buffer.move_word_forward();self.app.update_scroll();self.notify(cx);}
+            "b"=>{self.app.buffer.move_word_back();self.app.update_scroll();self.notify(cx);}
+            "G"=>{self.app.buffer.cursor.row=self.app.buffer.line_count().saturating_sub(1);self.app.buffer.cursor.col=0;self.app.update_scroll();self.notify(cx);}
+            "g"|"d"|"y"=>{self.app.pending_key=Some(k.chars().next().unwrap_or(' '));}
+            "x"=>{
+                if self.app.buffer.cursor.col < self.app.buffer.line(self.app.buffer.cursor.row).len() {
+                    self.app.buffer.delete_char_at_cursor();
                 }
+                self.rp();self.notify(cx);
             }
-            "y" => {
-                self.app.yank_buffer = Some(self.app.buffer.line(self.app.buffer.cursor.row).to_string());
-            }
-            ":" => {
-                self.app.mode = Mode::XlcInput;
-                self.app.xlc.open_panel(None);
-                self.notify(cx);
-            }
-            "/" => {
-                self.app.mode = Mode::XlcInput;
-                self.app.xlc.open_panel(Some("/"));
-                self.notify(cx);
-            }
-            "ctrl-f" | "f5" => {
-                self.app.explorer.toggle(self.app.filename.as_ref());
+            "u"=>{self.app.undo();self.rp();self.notify(cx);}
+            "p"=>{if let Some(ref yb)=self.app.yank_buffer.clone(){self.app.buffer.paste_line_after(yb);self.rp();self.notify(cx);}}
+            ":"=>{self.app.mode=Mode::XlcInput;self.app.xlc.open_panel(None);self.notify(cx);}
+            "/"=>{self.app.mode=Mode::XlcInput;self.app.xlc.open_panel(Some("/"));self.notify(cx);}
+            "ctrl-f"|"f5"=>{self.app.explorer.toggle(self.app.filename.as_ref());self.notify(cx);}
+            "ctrl-t"|"f12"=>{
+                if self.app.terminal.open { self.app.terminal.shutdown(); self.app.terminal.open=false; }
+                else { self.app.terminal.open=true; self.app.terminal.start(self.app.filename.as_ref()); }
                 self.notify(cx);
             }
             _ => {}
         }
     }
 
-    fn handle_insert(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        let k = event.keystroke.key.as_str();
+    fn hi(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
+        let k = e.keystroke.key.as_str();
         match k {
-            "escape" => { self.app.mode = Mode::Normal; self.notify(cx); }
-            "backspace" => { self.app.buffer.backspace(); self.reparse(); self.app.update_scroll(); self.notify(cx); }
-            "return" | "enter" => { self.app.buffer.insert_newline_with_indent(false); self.reparse(); self.app.update_scroll(); self.notify(cx); }
-            "tab" => {
-                for _ in 0..4 { self.app.buffer.insert_char(' '); }
-                self.reparse(); self.app.update_scroll(); self.notify(cx);
-            }
-            _ => {
-                if let Some(ch) = &event.keystroke.key_char {
-                    if !ch.is_empty() && ch != "\u{7f}" {
-                        for c in ch.chars() { self.app.buffer.insert_char(c); }
-                        self.reparse(); self.app.update_scroll(); self.notify(cx);
-                    }
-                }
-            }
+            "escape"=>{self.app.mode=Mode::Normal;if self.app.buffer.cursor.col>0{self.app.buffer.cursor.col-=1;}self.notify(cx);}
+            "backspace"=>{self.app.buffer.backspace();self.rp();self.app.update_scroll();self.notify(cx);}
+            "return"|"enter"=>{self.app.buffer.insert_newline_with_indent(false);self.rp();self.app.update_scroll();self.notify(cx);}
+            "tab"=>{for _ in 0..4{self.app.buffer.insert_char(' ');}self.rp();self.app.update_scroll();self.notify(cx);}
+            _ => { if let Some(ch)=&e.keystroke.key_char { if !ch.is_empty()&&ch!="\u{7f}" { for c in ch.chars(){self.app.buffer.insert_char(c);} self.rp();self.app.update_scroll();self.notify(cx); } } }
         }
     }
 
-    fn handle_xlc_key(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        let k = event.keystroke.key.as_str();
+    fn hv(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
+        let k = e.keystroke.key.as_str();
         match k {
-            "escape" => {
-                self.app.xlc.close();
-                self.app.mode = Mode::Normal;
-                self.notify(cx);
-            }
-            "return" | "enter" => {
-                self.app.execute_xlc();
-                self.reparse();
-                self.notify(cx);
-            }
-            "backspace" => {
-                self.app.xlc.pop_char();
-                self.notify(cx);
-            }
-            "up" => {
-                self.app.xlc.history_up();
-                self.notify(cx);
-            }
-            "down" => {
-                self.app.xlc.history_down();
-                self.notify(cx);
-            }
-            _ => {
-                if let Some(ch) = &event.keystroke.key_char {
-                    if !ch.is_empty() && ch != "\u{7f}" && ch.len() == 1 {
-                        self.app.xlc.push_char(ch.chars().next().unwrap());
-                        self.notify(cx);
-                    }
-                }
-            }
+            "escape"=>{self.app.mode=Mode::Normal;self.app.visual_anchor=None;self.notify(cx);}
+            "h"|"left"=>{self.app.buffer.move_left();self.app.update_scroll();self.notify(cx);}
+            "j"|"down"=>{self.app.buffer.move_down();self.app.update_scroll();self.notify(cx);}
+            "k"|"up"=>{self.app.buffer.move_up();self.app.update_scroll();self.notify(cx);}
+            "l"|"right"=>{self.app.buffer.move_right();self.app.update_scroll();self.notify(cx);}
+            "w"=>{self.app.buffer.move_word_forward();self.app.update_scroll();self.notify(cx);}
+            "b"=>{self.app.buffer.move_word_back();self.app.update_scroll();self.notify(cx);}
+            "0"|"home"=>{self.app.buffer.cursor.col=0;self.notify(cx);}
+            "$"|"end"=>{self.app.buffer.move_to_line_end();self.notify(cx);}
+            "G"=>{self.app.buffer.cursor.row=self.app.buffer.line_count().saturating_sub(1);self.app.buffer.cursor.col=0;self.app.update_scroll();self.notify(cx);}
+            "y"=>{self.app.yank_selection();self.app.mode=Mode::Normal;self.notify(cx);}
+            "d"=>{self.app.delete_selection();self.rp();self.app.mode=Mode::Normal;self.notify(cx);}
+            _ => {}
         }
     }
 
-    // ── Rendering ─────────────────────────────────────────
-
-    fn line_tokens(&self, row: usize) -> Vec<(usize, usize, TokenKind)> {
-        self.app.syntax.tokens.iter()
-            .filter(|(_, _, _, r)| *r == row)
-            .map(|(k, s, e, _)| {
-                let line_len = self.app.buffer.line(row).len();
-                (*s, if *e == usize::MAX { line_len } else { *e.min(&line_len) }, *k)
-            })
-            .collect()
+    fn handle_xlc(&mut self, e: &KeyDownEvent, cx: &mut Context<Self>) {
+        let k = e.keystroke.key.as_str();
+        match k {
+            "escape"=>{self.app.xlc.close();self.app.mode=Mode::Normal;self.notify(cx);}
+            "return"|"enter"=>{self.app.execute_xlc();self.rp();self.notify(cx);}
+            "backspace"=>{self.app.xlc.pop_char();self.notify(cx);}
+            "up"=>{self.app.xlc.history_up();self.notify(cx);}
+            "down"=>{self.app.xlc.history_down();self.notify(cx);}
+            _ => { if let Some(ch)=&e.keystroke.key_char { if !ch.is_empty()&&ch!="\u{7f}"&&ch.len()==1 { self.app.xlc.push_char(ch.chars().next().unwrap()); self.notify(cx); } } }
+        }
     }
 
-    fn render_line(&self, row: usize, offset: usize) -> AnyElement {
-        let actual_row = offset + row;
-        let line: String = self.app.buffer.line(actual_row).to_string();
-        let is_cursor = actual_row == self.app.buffer.cursor.row;
-        let bg = if is_cursor { self.theme.line_highlight } else { self.theme.bg };
-        let mut tokens = self.line_tokens(actual_row);
-        tokens.sort_by_key(|(s, _, _)| *s);
+    // ── RENDER ──────────────────────────────────────────
 
-        if tokens.is_empty() {
-            return self.render_plain_line(&line, is_cursor, bg);
-        }
-
-        let segments = self.build_segments(&line, &tokens);
-        if !is_cursor {
-            return self.render_colored_line(&segments, bg);
-        }
-        self.render_cursor_line(&segments, &line, bg)
+    fn lt(&self, row: usize) -> Vec<(usize,usize,TokenKind)> {
+        self.app.syntax.tokens.iter().filter(|(_,_,_,r)|*r==row).map(|(k,s,e,_)|(*s,if *e==usize::MAX{self.app.buffer.line(row).len()}else{*e.min(&self.app.buffer.line(row).len())},*k)).collect()
     }
 
-    fn build_segments(&self, line: &str, tokens: &[(usize, usize, TokenKind)]) -> Vec<(String, Hsla)> {
-        let mut segments: Vec<(String, Hsla)> = Vec::new();
-        let mut pos: usize = 0;
-        for (start, end, kind) in tokens {
-            if *start > pos && pos < line.len() {
-                let text: String = line.chars().skip(pos).take(start - pos).collect();
-                segments.push((text, self.theme.fg));
-            }
-            let text: String = line.chars().skip(*start).take(end - start).collect();
-            segments.push((text, self.theme.color_for(*kind)));
-            pos = *end;
+    fn segs(&self, line: &str, tokens: &[(usize,usize,TokenKind)]) -> Vec<(String,Hsla)> {
+        let mut v=Vec::new();let mut p:usize=0;
+        for (s,e,k) in tokens {
+            if *s>p&&p<line.len(){v.push((line.chars().skip(p).take(s-p).collect(),self.t.fg));}
+            v.push((line.chars().skip(*s).take(e-s).collect(),self.t.c(*k)));p=*e;
         }
-        if pos < line.len() {
-            let text: String = line.chars().skip(pos).collect();
-            segments.push((text, self.theme.fg));
-        }
-        segments
+        if p<line.len(){v.push((line.chars().skip(p).collect(),self.t.fg));}
+        v
     }
 
-    fn render_colored_line(&self, segments: &[(String, Hsla)], bg: Hsla) -> AnyElement {
-        let children: Vec<AnyElement> = segments.iter().map(|(text, color)| {
-            div().text_color(*color).child(text.clone()).into_any_element()
-        }).collect();
-        div().bg(bg).flex().flex_row().w_full().children(children).into_any_element()
-    }
+    fn render_line(&self, row: usize) -> AnyElement {
+        let line: String = self.app.buffer.line(row).to_string();
+        let is_cursor = row == self.app.buffer.cursor.row;
+        let mut bg = self.t.bg;
+        if is_cursor { bg = self.t.hl; }
+        if self.is_selected(row, 0) { bg = self.t.sel; }
 
-    fn render_plain_line(&self, line: &str, is_cursor: bool, bg: Hsla) -> AnyElement {
-        if !is_cursor {
-            return div().bg(bg).text_color(self.theme.fg).child(line.to_string()).into_any_element();
-        }
-        let col = self.app.buffer.cursor.col.min(line.len());
-        let chars: Vec<char> = line.chars().collect();
-        let before: String = chars[..col.min(chars.len())].iter().collect();
-        let at: String = chars.get(col).map(|c| c.to_string()).unwrap_or_default();
-        let after: String = chars.get((col+1)..).map(|s| s.iter().collect()).unwrap_or_default();
+        // LSP diagnostic marker
+        let diags: Vec<_> = self.app.lsp.diagnostics.iter().filter(|d|d.row==row).collect();
+        let gutter_mark = if !diags.is_empty() {
+            let sev = if diags.iter().any(|d|d.severity==crate::lsp::DiagnosticSeverity::Error) {"error"}else{"warning"};
+            let color = self.t.dc(sev);
+            Some((sev.to_string(), color))
+        } else { None };
 
-        let mut children: Vec<AnyElement> = vec![
-            div().text_color(self.theme.fg).child(before).into_any_element(),
-        ];
-        if self.app.mode == Mode::Insert {
-            children.push(div().bg(self.theme.cursor).w(px(1.5)).h(px(20.)).into_any_element());
-            if !at.is_empty() { children.push(div().text_color(self.theme.fg).child(at).into_any_element()); }
-        } else {
-            children.push(div().bg(self.theme.cursor).text_color(self.theme.bg).child(if at.is_empty() { " ".to_string() } else { at }).into_any_element());
-        }
-        if !after.is_empty() { children.push(div().text_color(self.theme.fg).child(after).into_any_element()); }
-        div().bg(bg).flex().flex_row().w_full().children(children).into_any_element()
-    }
+        let mut tokens = self.lt(row); tokens.sort_by_key(|(s,_,_)|*s);
 
-    fn render_cursor_line(&self, segments: &[(String, Hsla)], _line: &str, bg: Hsla) -> AnyElement {
-        let col = self.app.buffer.cursor.col;
-        let mut children: Vec<AnyElement> = Vec::new();
+        let segments = if tokens.is_empty() { vec![(line.clone(), self.t.fg)] } else { self.segs(&line, &tokens) };
+
+        // Colored segments for the whole line
+        let mut seg_elements: Vec<AnyElement> = Vec::new();
         let mut char_pos: usize = 0;
         let mut cursor_inserted = false;
+        let col = self.app.buffer.cursor.col;
 
-        for (text, color) in segments {
+        for (text, color) in &segments {
             let seg_len = text.chars().count();
             let seg_end = char_pos + seg_len;
-            let cursor_in_seg = !cursor_inserted && col >= char_pos && col <= seg_end;
+            let cursor_in_seg = is_cursor && !cursor_inserted && col >= char_pos && col <= seg_end;
 
             if cursor_in_seg {
-                let offset = col - char_pos;
-                let before: String = text.chars().take(offset).collect();
-                let at: String = text.chars().skip(offset).take(1).collect();
-                let after: String = text.chars().skip(offset + 1).collect();
-
-                if !before.is_empty() { children.push(div().text_color(*color).child(before).into_any_element()); }
+                let off = col - char_pos;
+                let bf: String = text.chars().take(off).collect();
+                let at: String = text.chars().skip(off).take(1).collect();
+                let af: String = text.chars().skip(off + 1).collect();
+                if !bf.is_empty() { seg_elements.push(div().text_color(*color).child(bf).into_any_element()); }
                 if self.app.mode == Mode::Insert {
-                    children.push(div().bg(self.theme.cursor).w(px(1.5)).h(px(20.)).into_any_element());
-                    if !at.is_empty() { children.push(div().text_color(*color).child(at).into_any_element()); }
+                    seg_elements.push(div().bg(self.t.cur).w(px(1.5)).h(px(20.)).into_any_element());
+                    if !at.is_empty() { seg_elements.push(div().text_color(*color).child(at).into_any_element()); }
                 } else {
-                    children.push(div().bg(self.theme.cursor).text_color(self.theme.bg).child(if at.is_empty() { " ".to_string() } else { at }).into_any_element());
+                    seg_elements.push(div().bg(self.t.cur).text_color(self.t.bg).child(if at.is_empty(){" ".to_string()}else{at}).into_any_element());
                 }
-                if !after.is_empty() { children.push(div().text_color(*color).child(after).into_any_element()); }
+                if !af.is_empty() { seg_elements.push(div().text_color(*color).child(af).into_any_element()); }
                 cursor_inserted = true;
             } else {
-                children.push(div().text_color(*color).child(text.clone()).into_any_element());
+                seg_elements.push(div().text_color(*color).child(text.clone()).into_any_element());
             }
             char_pos = seg_end;
         }
 
-        if !cursor_inserted {
-            if self.app.mode == Mode::Insert {
-                children.push(div().bg(self.theme.cursor).w(px(1.5)).h(px(20.)).into_any_element());
-            } else {
-                children.push(div().bg(self.theme.cursor).child(" ").into_any_element());
-            }
+        if is_cursor && !cursor_inserted {
+            if self.app.mode == Mode::Insert { seg_elements.push(div().bg(self.t.cur).w(px(1.5)).h(px(20.)).into_any_element()); }
+            else { seg_elements.push(div().bg(self.t.cur).child(" ").into_any_element()); }
         }
 
-        div().bg(bg).flex().flex_row().w_full().children(children).into_any_element()
+        let line_div = div().bg(bg).flex().flex_row().w_full().children(seg_elements);
+
+        // Diagnostic underline decoration
+        if let Some((_, _color)) = gutter_mark {
+            let underline = div().bg(self.t.err).w_full().h(px(1.));
+            return div().flex().flex_col().w_full().child(line_div).child(underline).into_any_element();
+        }
+
+        line_div.into_any_element()
+    }
+
+    fn render_completion(&self) -> AnyElement {
+        if !self.app.completions.active || self.app.completions.suggestions.is_empty() { return div().into_any_element(); }
+        let max_h = 10.min(self.app.completions.suggestions.len());
+        let items: Vec<AnyElement> = self.app.completions.suggestions.iter().enumerate().take(max_h).map(|(i,s)|{
+            let bg = if i==self.app.completions.selected {self.t.comp_sel}else{self.t.comp_bg};
+            div().bg(bg).px(px(8.)).py(px(2.)).child(format!("{} — {}", s.label, s.detail)).into_any_element()
+        }).collect();
+        div().absolute().bottom(px(40.)).left(px(100.)).bg(self.t.comp_bg).border_1().border_color(self.t.comp_border).rounded_md().overflow_hidden().w(px(300.)).children(items).into_any_element()
+    }
+
+    fn render_terminal(&self) -> AnyElement {
+        if !self.app.terminal.open { return div().into_any_element(); }
+        let raw = self.app.terminal.visible_rows();
+        let rows: Vec<AnyElement> = raw.iter().map(|cells| {
+            let cells_el: Vec<AnyElement> = cells.iter().map(|(ch, fg, _)| {
+                let color = match fg { Some(c) => { let l = rat_to_hsla(c); Hsla { h:0., s:0., l, a:1. } }, None => self.t.term_fg };
+                div().text_color(color).child(ch.clone()).into_any_element()
+            }).collect();
+            div().flex().flex_row().font_family("Buffer").children(cells_el).into_any_element()
+        }).collect();
+        div().bg(self.t.term_bg).h(px(200.)).flex().flex_col().children(rows).into_any_element()
     }
 
     fn render_tab_bar(&self) -> AnyElement {
-        let tabs: Vec<AnyElement> = self.app.buffers.iter().enumerate().map(|(i, tab)| {
-            let bg = if i == self.app.current_buffer { self.theme.tab_active } else { self.theme.tab_inactive };
-            let name = tab.filename.as_ref().and_then(|p| p.file_name()).and_then(|n| n.to_str()).unwrap_or("[no name]");
-            let label = if tab.modified { format!(" {}+ ", name) } else { format!(" {} ", name) };
-            div().bg(bg).text_color(self.theme.fg).px(px(6.)).py(px(2.)).child(label).into_any_element()
+        let tabs: Vec<AnyElement> = self.app.buffers.iter().enumerate().map(|(i,tb)|{
+            let bg = if i==self.app.current_buffer{self.t.ta}else{self.t.ti};
+            let name = tb.filename.as_ref().and_then(|p|p.file_name()).and_then(|n|n.to_str()).unwrap_or("[no name]");
+            let label = if tb.modified { format!(" {}+ ",name) } else { format!(" {} ",name) };
+            div().bg(bg).text_color(self.t.fg).px(px(6.)).py(px(2.)).child(label).into_any_element()
         }).collect();
-
-        div().bg(self.theme.tab_inactive).flex().flex_row().w_full().h(px(24.)).children(tabs).into_any_element()
+        div().bg(self.t.ti).flex().flex_row().w_full().h(px(24.)).children(tabs).into_any_element()
     }
 
     fn render_explorer(&self) -> AnyElement {
-        if !self.app.explorer.open {
-            return div().into_any_element();
-        }
-        let entries: Vec<AnyElement> = self.app.explorer.entries.iter().enumerate().map(|(i, entry)| {
-            let bg = if i == self.app.explorer.selected { self.theme.line_highlight } else { self.theme.explorer_bg };
-            let color = if entry.is_dir { self.theme.explorer_dir } else { self.theme.explorer_fg };
-            let prefix = if entry.is_dir { "📁 " } else { "📄 " };
-            div().bg(bg).text_color(color).child(format!("{}{}", prefix, entry.name)).into_any_element()
+        if !self.app.explorer.open { return div().into_any_element(); }
+        let entries: Vec<AnyElement> = self.app.explorer.entries.iter().enumerate().map(|(i,e)|{
+            let bg = if i==self.app.explorer.selected{self.t.hl}else{self.t.ebg};
+            let color = if e.is_dir{self.t.edr}else{self.t.efg};
+            let icon = if e.is_dir { "\u{1f4c1} " } else { "\u{1f4c4} " };
+            div().bg(bg).text_color(color).child(format!("{}{}", icon, e.name)).into_any_element()
         }).collect();
-
-        div().bg(self.theme.explorer_bg).flex().flex_col().w(px(200.)).h_full().children(entries).into_any_element()
+        div().bg(self.t.ebg).flex().flex_col().w(px(200.)).h_full().children(entries).into_any_element()
     }
 
     fn render_xlc(&self) -> AnyElement {
-        if !self.app.xlc.open {
-            return div().into_any_element();
-        }
+        if !self.app.xlc.open { return div().into_any_element(); }
         let prompt = if self.app.search_pattern.is_none() { ":" } else { "/" };
         let input = format!("{}{}", prompt, self.app.xlc.input);
-        div().w_full().bg(self.theme.xlc_bg).text_color(self.theme.xlc_fg)
-            .px(px(12.)).py(px(2.)).border_b_1().border_color(self.theme.status_bg)
-            .child(input).into_any_element()
+        div().w_full().bg(self.t.xbg).text_color(self.t.xfg).px(px(12.)).py(px(2.)).border_b_1().border_color(self.t.sbar).child(input).into_any_element()
     }
 
     fn render_status_bar(&self) -> AnyElement {
-        let mode_text = match self.app.mode {
-            Mode::Normal => {
-                if let Some(pk) = self.app.pending_key { pk.to_string() } else { "NORMAL".to_string() }
-            }
-            Mode::Insert => "INSERT".to_string(),
-            Mode::XlcInput => "COMMAND".to_string(),
-            _ => "---".to_string(),
+        let mode = match self.app.mode {
+            Mode::Normal=>if let Some(pk)=self.app.pending_key{pk.to_string()}else{"NORMAL".to_string()},
+            Mode::Insert=>"INSERT".to_string(), Mode::Visual=>"VISUAL".to_string(), Mode::VisualLine=>"V-LINE".to_string(),
+            Mode::XlcInput=>"COMMAND".to_string(), _=>"---".to_string(),
         };
-        let file = self.app.filename.as_ref().and_then(|p| p.file_name()).and_then(|n| n.to_str()).unwrap_or("[no name]").to_string();
-        let cur = format!("{}:{}", self.app.buffer.cursor.row + 1, self.app.buffer.cursor.col + 1);
-        let lang = self.ext.clone().unwrap_or_else(|| "txt".to_string());
+        let file = self.app.filename.as_ref().and_then(|p|p.file_name()).and_then(|n|n.to_str()).unwrap_or("[no name]").to_string();
+        let cur = format!("{}:{}", self.app.buffer.cursor.row+1, self.app.buffer.cursor.col+1);
+        let lang = self.ext.clone().unwrap_or_else(||"txt".to_string());
+        let diags = self.app.lsp.diagnostics.len();
+        let diag_text = if diags>0{format!(" {} issues",diags)}else{String::new()};
 
-        div().w_full().h(px(24.)).bg(self.theme.status_bg).text_color(self.theme.status_fg)
+        div().w_full().h(px(24.)).bg(self.t.sbar).text_color(self.t.sf)
             .flex().flex_row().items_center().justify_between().px(px(12.))
             .child(div().flex().flex_row().gap(px(16.))
-                .children(vec![div().child(mode_text), div().child(file)]))
+                .children(vec![div().child(mode), div().child(file)]))
             .child(div().flex().flex_row().gap(px(16.))
-                .children(vec![div().child(lang), div().child(cur)]))
+                .children(vec![div().child(lang), div().child(diag_text), div().child(cur)]))
             .into_any_element()
     }
 }
 
-impl Render for GuiSuite {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let line_count = self.app.buffer.line_count();
-        let visible_start = self.app.scroll;
-        let visible_end = (visible_start + 40).min(line_count);
-
-        let gutter: Vec<AnyElement> = (visible_start..visible_end).map(|n| {
-            let bg = if n == self.app.buffer.cursor.row { self.theme.line_highlight } else { self.theme.gutter_bg };
-            div().bg(bg).w(px(52.)).px(px(8.)).child(format!("{:>3} ", n + 1)).into_any_element()
+impl Render for Suisei {
+    fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let lc = self.app.buffer.line_count();
+        let vs = self.app.scroll;
+        let ve = (vs + 40).min(lc);
+        let gutter: Vec<AnyElement> = (vs..ve).map(|n|{
+            let has_diag = self.app.lsp.diagnostics.iter().any(|d|d.row==n);
+            let color = if has_diag { self.t.err } else { self.t.gfg };
+            let bg = if n==self.app.buffer.cursor.row{self.t.hl}else{self.t.gbg};
+            div().bg(bg).w(px(52.)).px(px(8.)).text_color(color).child(format!("{:>3} ", n+1)).into_any_element()
         }).collect();
+        let lines: Vec<AnyElement> = (vs..ve).map(|i| self.render_line(i)).collect();
 
-        let lines: Vec<AnyElement> = (visible_start..visible_end).map(|i| self.render_line(i - visible_start, visible_start)).collect();
-
-        let tab_bar = self.render_tab_bar();
-        let explorer = self.render_explorer();
-        let xlc_bar = self.render_xlc();
-        let status = self.render_status_bar();
-
-        div().flex().flex_col().size_full().bg(self.theme.bg)
-            .key_context("Editor").track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                this.on_key(event, window, cx);
-            }))
-            .child(tab_bar)
-            .child(
-                div().flex().flex_row().flex_1()
-                    .child(explorer)
-                    .child(
-                        div().flex().flex_row().flex_1()
-                            .child(div().flex().flex_col().bg(self.theme.gutter_bg).text_color(self.theme.gutter_fg).children(gutter))
-                            .child(div().flex().flex_col().flex_1().children(lines))
-                    )
+        div().flex().flex_col().size_full().bg(self.t.bg)
+            .key_context("Suisei").track_focus(&self.fh)
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, w, cx| this.handle_key(e, w, cx)))
+            .child(self.render_tab_bar())
+            .child(div().flex().flex_row().flex_1()
+                .child(self.render_explorer())
+                .child(div().flex().flex_row().flex_1()
+                    .child(div().flex().flex_col().bg(self.t.gbg).children(gutter))
+                    .child(div().flex().flex_col().flex_1().children(lines))
+                )
             )
-            .child(xlc_bar)
-            .child(status)
+            .child(self.render_xlc())
+            .child(self.render_terminal())
+            .child(self.render_completion())
+            .child(self.render_status_bar())
     }
+}
+
+fn rat_to_hsla(c: &ratatui::style::Color) -> f32 {
+    match c { ratatui::style::Color::White|ratatui::style::Color::Gray|ratatui::style::Color::LightGreen|ratatui::style::Color::LightYellow|ratatui::style::Color::LightCyan=>0.85, ratatui::style::Color::Black|ratatui::style::Color::DarkGray=>0.1, ratatui::style::Color::Red|ratatui::style::Color::LightRed=>0.55, ratatui::style::Color::Green=>0.55, ratatui::style::Color::Yellow=>0.85, ratatui::style::Color::Blue|ratatui::style::Color::LightBlue=>0.55, ratatui::style::Color::Magenta|ratatui::style::Color::LightMagenta=>0.55, ratatui::style::Color::Cyan=>0.55, ratatui::style::Color::Rgb(_,_,_)|ratatui::style::Color::Indexed(_)=>0.85, _=>0.85 }
 }

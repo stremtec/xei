@@ -16,7 +16,7 @@ pub fn run_desktop(file_path: Option<String>) {
                 ..Default::default()
             },
             |_window, cx| {
-                cx.new(|cx| editor::GuiSuite::new(cx, file_path))
+                cx.new(|cx| editor::Suisei::new(cx, file_path))
             },
         )
         .unwrap();

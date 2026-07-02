@@ -736,7 +736,7 @@ impl App {
         self.lsp_restart_for_current();
     }
 
-    fn lsp_restart_for_current(&mut self) {
+    pub fn lsp_restart_for_current(&mut self) {
         if let Some(ref path) = self.filename {
             self.lsp.auto_start(&path.display().to_string());
         }

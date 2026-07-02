@@ -70,10 +70,18 @@ fn handle_input(app: &mut App, key: &str, ctrl: bool, _alt: bool, _shift: bool, 
 
     if ctrl {
         match key {
-            "f" => { app.explorer.toggle(app.filename.as_ref()); return; }
+            "f" => {
+                let was_open = app.explorer.open;
+                let filename = app.filename.clone();
+                app.explorer.toggle(filename.as_ref());
+                if app.explorer.open && !was_open { app.mode = xei_core::Mode::Explorer; }
+                else if !app.explorer.open { app.mode = xei_core::Mode::Normal; }
+                return;
+            }
             "t" => {
-                if app.terminal.open { app.terminal.shutdown(); app.terminal.open = false; }
-                else { app.terminal.open = true; app.terminal.start(app.filename.as_ref()); }
+                let filename = app.filename.clone();
+                if app.terminal.open { app.terminal.shutdown(); app.terminal.open = false; app.mode = xei_core::Mode::Normal; }
+                else { app.terminal.open = true; app.terminal.start(filename.as_ref()); app.mode = xei_core::Mode::Terminal; }
                 return;
             }
             _ => {}
@@ -81,7 +89,58 @@ fn handle_input(app: &mut App, key: &str, ctrl: bool, _alt: bool, _shift: bool, 
     }
 
     match app.mode {
+        xei_core::Mode::Explorer => {
+            match key {
+                "Escape" | "q" => { app.explorer.close(); app.mode = xei_core::Mode::Normal; }
+                "j" | "ArrowDown" => { app.explorer.move_down(); }
+                "k" | "ArrowUp" => { app.explorer.move_up(); }
+                "h" | "ArrowLeft" => { if let Some(parent) = app.explorer.cwd.parent() { app.explorer.cwd = parent.to_path_buf(); app.explorer.refresh(); } }
+                "l" | "ArrowRight" | "Enter" => {
+                    if let Some(path) = app.explorer.select_current() {
+                        if path.is_dir() { app.explorer.cwd = path; app.explorer.refresh(); }
+                        else { app.explorer.close(); app.open_new_tab(&path.display().to_string()); app.mode = xei_core::Mode::Normal; }
+                    }
+                }
+                _ => {}
+            }
+            return;
+        }
+        xei_core::Mode::Terminal => {
+            match key {
+                "Escape" => { app.mode = xei_core::Mode::Normal; }
+                "Enter" => { app.terminal.write_input(b"\n"); app.terminal.poll(); }
+                "Backspace" => { app.terminal.write_input(b"\x7f"); app.terminal.poll(); }
+                "Tab" => { app.terminal.write_input(b"\t"); app.terminal.poll(); }
+                _ if key.len() == 1 => { app.terminal.write_input(key.as_bytes()); app.terminal.poll(); }
+                _ => {}
+            }
+            return;
+        }
+        xei_core::Mode::XlcInput => {
+            match key {
+                "Escape" => { app.xlc.close(); app.mode = xei_core::Mode::Normal; }
+                "Enter" => { app.execute_xlc(); }
+                "Backspace" => { app.xlc.pop_char(); }
+                "ArrowUp" => { app.xlc.history_up(); }
+                "ArrowDown" => { app.xlc.history_down(); }
+                _ if key.len() == 1 => { app.xlc.push_char(key.chars().next().unwrap()); }
+                _ => {}
+            }
+            return;
+        }
         xei_core::Mode::Normal => {
+            // Handle pending keys
+            if let Some(px) = app.pending_key.take() {
+                match (px, key) {
+                    ('g', "g") => { app.buffer.cursor.row = 0; app.buffer.cursor.col = 0; app.scroll = 0; return; }
+                    ('g', "t") => { app.next_tab(); return; }
+                    ('g', "T") => { app.prev_tab(); return; }
+                    ('d', "d") => { app.push_undo(); app.delete_line(); return; }
+                    ('d', "w") => { app.push_undo(); app.delete_word(); return; }
+                    ('y', "y") => { app.yank_buffer = Some(app.buffer.line(app.buffer.cursor.row).to_string()); app.message = "Yanked".into(); return; }
+                    _ => {}
+                }
+            }
             match key {
                 "i" => app.mode = xei_core::Mode::Insert,
                 "a" => { app.buffer.move_right(); app.mode = xei_core::Mode::Insert; }
@@ -109,6 +168,7 @@ fn handle_input(app: &mut App, key: &str, ctrl: bool, _alt: bool, _shift: bool, 
                 "p" => app.paste(),
                 ":" => { app.mode = xei_core::Mode::XlcInput; app.xlc.open_panel(None); }
                 "/" => { app.mode = xei_core::Mode::XlcInput; app.xlc.open_panel(Some("/")); }
+                "g" | "d" | "y" => { app.pending_key = Some(key.chars().next().unwrap_or(' ')); }
                 "n" => { app.search_next(); app.update_scroll(); }
                 "N" => { app.search_prev(); app.update_scroll(); }
                 "Escape" => {}
@@ -138,15 +198,6 @@ fn handle_input(app: &mut App, key: &str, ctrl: bool, _alt: bool, _shift: bool, 
                 "l" => { app.buffer.move_right(); app.update_scroll(); }
                 "y" => { app.yank_selection(); app.mode = xei_core::Mode::Normal; }
                 "d" => { app.delete_selection(); app.mode = xei_core::Mode::Normal; }
-                _ => {}
-            }
-        }
-        xei_core::Mode::XlcInput => {
-            match key {
-                "Escape" => { app.xlc.close(); app.mode = xei_core::Mode::Normal; }
-                "Enter" => { app.execute_xlc(); }
-                "Backspace" => { app.xlc.pop_char(); }
-                _ if key.len() == 1 => { app.xlc.push_char(key.chars().next().unwrap()); }
                 _ => {}
             }
         }

@@ -1,77 +1,103 @@
 <script>
   import { invoke } from "@tauri-apps/api/core";
+  import Explorer from "./Explorer.svelte";
   import Editor from "./Editor.svelte";
+  import Terminal from "./Terminal.svelte";
+  import XlcPanel from "./XlcPanel.svelte";
   import StatusBar from "./StatusBar.svelte";
   import TabBar from "./TabBar.svelte";
-  import Explorer from "./Explorer.svelte";
-  import XlcPanel from "./XlcPanel.svelte";
 
   let state = $state(null);
-  let error = $state("");
+  let explorerWidth = $state(200);
+  let termWidth = $state(0);
+  let dragging = $state(null);
 
   async function refresh() {
+    try { state = await invoke("get_state"); } catch(e) {}
+  }
+
+  async function sendKey(e) {
+    e.preventDefault();
     try {
-      state = await invoke("get_state");
-    } catch (e) {
-      error = e.toString();
-    }
+      await invoke("handle_key", {
+        key: e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey,
+      });
+      await refresh();
+    } catch(e) {}
   }
 
-  async function onKey(e) {
-    if (e.metaKey || e.ctrlKey || e.altKey) {
-      e.preventDefault();
-      try {
-        await invoke("handle_key", {
-          key: e.key,
-          ctrl: e.ctrlKey,
-          alt: e.altKey,
-          shift: e.shiftKey,
-          meta: e.metaKey,
-        });
-        await refresh();
-      } catch (err) {
-        error = err.toString();
-      }
-      return;
-    }
-    if (e.key.length === 1 || ["Enter", "Backspace", "Tab", "Escape", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
-      e.preventDefault();
-      try {
-        await invoke("handle_key", {
-          key: e.key,
-          ctrl: false, alt: false, shift: false, meta: false,
-        });
-        await refresh();
-      } catch (err) {
-        error = err.toString();
-      }
-    }
+  function onMouseDownResize(panel, e) {
+    e.preventDefault();
+    dragging = { panel, startX: e.clientX, startW: panel === "explorer" ? explorerWidth : termWidth };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }
+  function onMouseMove(e) {
+    if (!dragging) return;
+    let dw = e.clientX - dragging.startX;
+    let newW = (dragging.startW + dw).clamp(100, 400);
+    if (dragging.panel === "explorer") explorerWidth = newW;
+    else termWidth = newW;
+  }
+  function onMouseUp() {
+    dragging = null;
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
   }
 
-  $effect(() => { refresh(); });
+  $effect(() => {
+    refresh();
+    let timer = setInterval(refresh, 500);
+    return () => clearInterval(timer);
+  });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={sendKey} />
 
-<div class="app">
-  <TabBar {state} />
+<div class="app" style="font-family:'SF Mono','Fira Code',monospace;font-size:14px;">
+  {#if state?.tabs}
+    <TabBar {state} />
+  {/if}
+
   <div class="main">
     {#if state?.explorer_open}
-      <Explorer {state} />
+      <div class="panel" style="width:{explorerWidth}px;min-width:100px;">
+        <Explorer {state} />
+      </div>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="resize-handle" onmousedown={(e) => onMouseDownResize("explorer", e)}></div>
     {/if}
-    <div class="editor-wrap" tabindex="0">
+
+    <div class="editor-area" style="flex:1;overflow:hidden;">
       <Editor {state} />
     </div>
+
+    {#if state?.terminal_open}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="resize-handle" onmousedown={(e) => onMouseDownResize("term", e)}></div>
+      <div class="panel" style="width:{termWidth || 300}px;min-width:150px;">
+        <Terminal {state} />
+      </div>
+    {/if}
   </div>
+
   {#if state?.xlc_open}
     <XlcPanel {state} />
   {/if}
-  <StatusBar {state} {error} />
+  {#if state}
+    <StatusBar {state} />
+  {/if}
 </div>
 
 <style>
-  .app { display: flex; flex-direction: column; height: 100vh; background: #1a1b26; color: #c0caf5; font-size: 14px; }
-  .main { display: flex; flex: 1; overflow: hidden; }
-  .editor-wrap { flex: 1; overflow-y: auto; outline: none; padding: 4px 8px; font-family: 'SF Mono', 'Fira Code', monospace; line-height: 1.5; white-space: pre; }
-  .editor-wrap:focus { background: #1a1b26; }
+  :global(body) { margin:0; padding:0; background:#1a1b26; color:#c0caf5; overflow:hidden; }
+  .app { display:flex; flex-direction:column; height:100vh; background:#1a1b26; color:#c0caf5; }
+  .main { display:flex; flex:1; overflow:hidden; }
+  .panel { overflow-y:auto; overflow-x:hidden; }
+  .editor-area { display:flex; flex-direction:column; overflow:hidden; }
+  .resize-handle {
+    width:4px; cursor:col-resize; background:#24283b;
+    flex-shrink:0; transition: background 0.15s;
+  }
+  .resize-handle:hover { background:#7aa2f7; }
 </style>

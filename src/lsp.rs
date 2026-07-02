@@ -18,6 +18,7 @@ pub struct LspClient {
     pub pending_definition: Option<Location>,
     pub pending_completions: Vec<CompletionItem>,
     pub error: Option<String>,
+    current_uri: String,
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +35,7 @@ pub enum DiagnosticSeverity { Error, Warning, Info, Hint }
 
 #[derive(Debug)]
 pub enum LspMessage {
-    Diagnostics(Vec<Diagnostic>),
+    Diagnostics(Vec<Diagnostic>, String),
     Definition { path: PathBuf, row: usize, col: usize },
     Completions(Vec<CompletionItem>),
     InitResponse,
@@ -56,7 +57,7 @@ pub struct CompletionItem {
 
 impl Default for LspClient {
     fn default() -> Self {
-        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), server_lang: String::new(), initialized: false, pending_didopen: None, pending_definition: None, pending_completions: Vec::new(), error: None }
+        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), server_lang: String::new(), initialized: false, pending_didopen: None, pending_definition: None, pending_completions: Vec::new(), error: None, current_uri: String::new() }
     }
 }
 
@@ -113,6 +114,7 @@ impl LspClient {
         self.rx = Some(rx);
         self._child = Some(child);
         self.server_name = parts[0].to_string();
+        self.current_uri = file_uri(file_path);
 
         let init = format!(r#"{{"jsonrpc":"2.0","id":{},"method":"initialize","params":{{"processId":null,"rootUri":"{}","capabilities":{{}}}}}}"#, self.next_id, file_uri(root));
         self.next_id += 1;
@@ -188,9 +190,11 @@ impl LspClient {
         if let Some(ref rx) = self.rx {
             loop {
                 match rx.try_recv() {
-                    Ok(LspMessage::Diagnostics(diags)) => {
-                        if !diags.is_empty() {
-                            self.diagnostics = diags;
+                    Ok(LspMessage::Diagnostics(diags, uri)) => {
+                        if uri.is_empty() || uri == self.current_uri {
+                            if !diags.is_empty() {
+                                self.diagnostics = diags;
+                            }
                         }
                     }
                     Ok(LspMessage::InitResponse) => {
@@ -237,6 +241,7 @@ fn parse_message(text: &str) -> Option<LspMessage> {
     }
 
     if method.as_deref() == Some("textDocument/publishDiagnostics") {
+        let uri = extract_str(text, "\"uri\":\"").unwrap_or("").to_string();
         let mut diags = Vec::new();
         let items_start = text.find("\"diagnostics\":[");
         if let Some(start) = items_start {
@@ -258,7 +263,7 @@ fn parse_message(text: &str) -> Option<LspMessage> {
                 diags.push(Diagnostic { row, col_start, col_end, message: msg, severity });
             }
         }
-        return Some(LspMessage::Diagnostics(diags));
+        return Some(LspMessage::Diagnostics(diags, uri));
     }
 
     if method.as_deref() == Some("textDocument/definition") {

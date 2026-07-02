@@ -228,7 +228,7 @@ fn draw_editor(f: &mut Frame, app: &App, area: Rect) {
         display_row += line_rows;
     }
 
-    if found {
+    if found && display_row < (main_area.height as usize).saturating_sub(2) {
         let cursor_x = (main_area.x + 1 + LINE_NO_WIDTH + (screen_col % text_width) as u16)
             .min(main_area.x + main_area.width.saturating_sub(1));
         let cursor_y = (main_area.y + 1 + display_row as u16)

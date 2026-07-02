@@ -12,6 +12,7 @@ pub struct LspClient {
     pub diagnostics: Vec<Diagnostic>,
     pub server_running: bool,
     pub server_name: String,
+    pub server_lang: String,
     pub pending_definition: Option<Location>,
     pub pending_completions: Vec<CompletionItem>,
     pub error: Option<String>,
@@ -52,7 +53,7 @@ pub struct CompletionItem {
 
 impl Default for LspClient {
     fn default() -> Self {
-        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), pending_definition: None, pending_completions: Vec::new(), error: None }
+        Self { stdin: None, rx: None, _child: None, next_id: 1, diagnostics: Vec::new(), server_running: false, server_name: String::new(), server_lang: String::new(), pending_definition: None, pending_completions: Vec::new(), error: None }
     }
 }
 
@@ -223,8 +224,8 @@ fn parse_message(text: &str) -> Option<LspMessage> {
                 let row = extract_int(item, "\"line\":").unwrap_or(0) as usize;
                 let col_start = extract_int(item, "\"character\":").unwrap_or(0) as usize;
                 let col_end = item.split("\"character\":").nth(2)
-                    .and_then(|s| s.split(',').next())
-                    .and_then(|s| s.trim().parse().ok()).unwrap_or(col_start + 1);
+                    .and_then(|s| s.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok())
+                    .unwrap_or(col_start + 1);
                 let msg = extract_str(item, "\"message\":\"").unwrap_or_default().to_string();
                 let severity = match extract_int(item, "\"severity\":") {
                     Some(1) => DiagnosticSeverity::Error,

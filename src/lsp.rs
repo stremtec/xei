@@ -189,7 +189,9 @@ impl LspClient {
             loop {
                 match rx.try_recv() {
                     Ok(LspMessage::Diagnostics(diags)) => {
-                        self.diagnostics = diags;
+                        if !diags.is_empty() {
+                            self.diagnostics = diags;
+                        }
                     }
                     Ok(LspMessage::InitResponse) => {
                         if !self.initialized {

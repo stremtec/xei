@@ -642,6 +642,13 @@ impl App {
                 }
             }
         }
+        // Debug: show diagnostic rows in message
+        if !self.lsp.diagnostics.is_empty() {
+            let rows: Vec<usize> = self.lsp.diagnostics.iter().map(|d| d.row).collect();
+            let row_str: Vec<String> = rows.iter().map(|r| r.to_string()).collect();
+            self.xlc.add_output(&format!("diag rows: {}", row_str.join(",")));
+            
+        }
     }
 
     pub fn save_state_to_tab(&mut self) {

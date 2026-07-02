@@ -373,6 +373,7 @@ fn handle_normal(app: &mut App, code: KeyCode) {
             let last_row = app.buffer.line_count().saturating_sub(1);
             app.buffer.cursor.row = last_row;
             app.buffer.move_to_line_start();
+            app.update_scroll();
         }
         KeyCode::Char('g') => {
             app.pending_key = Some('g');
@@ -393,6 +394,7 @@ fn handle_pending(app: &mut App, pending: char, code: KeyCode) {
         ('g', KeyCode::Char('g')) => {
             app.buffer.cursor.row = 0;
             app.buffer.cursor.col = 0;
+            app.scroll = 0;
             app.message = String::new();
         }
         ('g', KeyCode::Char('d')) => {
@@ -578,6 +580,7 @@ fn handle_visual(app: &mut App, code: KeyCode) {
             let last_row = app.buffer.line_count().saturating_sub(1);
             app.buffer.cursor.row = last_row;
             app.buffer.move_to_line_start();
+            app.update_scroll();
         }
         _ => {}
     }

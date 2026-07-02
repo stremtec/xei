@@ -356,10 +356,16 @@ impl Suisei {
 }
 
 impl Render for Suisei {
-    fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let lc = self.app.buffer.line_count();
         let vs = self.app.scroll;
-        let ve = (vs + 40).min(lc);
+        // Calculate visible lines from window height, minus tab/status/terminal
+        let win_h: f32 = w.viewport_size().height.into();
+        let line_h = 20.; // estimated line height in px
+        let reserved = 24. + 24. + 24.; // tab + status + xlc
+        let avail = (win_h - reserved).max(line_h);
+        let vis_lines = (avail / line_h) as usize;
+        let ve = (vs + vis_lines.max(5)).min(lc);
         let gutter: Vec<AnyElement> = (vs..ve).map(|n|{
             let has_diag = self.app.lsp.diagnostics.iter().any(|d|d.row==n);
             let color = if has_diag { self.t.err } else { self.t.gfg };
@@ -374,9 +380,9 @@ impl Render for Suisei {
             .child(self.render_tab_bar())
             .child(div().flex().flex_row().flex_1()
                 .child(self.render_explorer())
-                .child(div().flex().flex_row().flex_1()
-                    .child(div().flex().flex_col().bg(self.t.gbg).children(gutter))
-                    .child(div().flex().flex_col().flex_1().children(lines))
+                .child(div().flex().flex_row().flex_1().overflow_hidden()
+                    .child(div().flex().flex_col().bg(self.t.gbg).overflow_hidden().children(gutter))
+                    .child(div().flex().flex_col().flex_1().overflow_hidden().children(lines))
                 )
             )
             .child(self.render_xlc())

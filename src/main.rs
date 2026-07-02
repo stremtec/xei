@@ -41,7 +41,8 @@ fn main() -> io::Result<()> {
                 println!("xei (晴) — a modern Vim-like terminal editor\n");
                 println!("Usage: xei [FILE]       Open a file for editing");
                 println!("       xei --version     Print version");
-                println!("       xei --help        Show this help\n");
+                println!("       xei --help        Show this help");
+                println!("       xei --debug FILE  Open with debug logging\n");
                 println!("Homepage: https://github.com/stremtec/xei");
                 return Ok(());
             }
@@ -58,6 +59,10 @@ fn main() -> io::Result<()> {
 
     let mut app = if args.len() > 1 && !args[1].starts_with('-') {
         App::open_file(&args[1])
+    } else if args.len() > 2 && args[1] == "--debug" {
+        let mut a = App::open_file(&args[2]);
+        a.debug = true;
+        a
     } else {
         App::new()
     };

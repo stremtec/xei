@@ -62,6 +62,7 @@ pub struct App {
     pub current_buffer: usize,
     pub syntax: SyntaxEngine,
     pub lsp: LspClient,
+    pub debug: bool,
 }
 
 #[derive(Clone)]
@@ -141,6 +142,7 @@ impl Default for App {
             current_buffer: 0,
             syntax: SyntaxEngine::new(),
             lsp: LspClient::new(),
+            debug: false,
         }
     }
 }
@@ -642,12 +644,9 @@ impl App {
                 }
             }
         }
-        // Debug: show diagnostic rows in message
-        if !self.lsp.diagnostics.is_empty() {
-            let rows: Vec<usize> = self.lsp.diagnostics.iter().map(|d| d.row).collect();
-            let row_str: Vec<String> = rows.iter().map(|r| r.to_string()).collect();
-            self.xlc.add_output(&format!("diag rows: {}", row_str.join(",")));
-            
+        if self.debug && !self.lsp.diagnostics.is_empty() {
+            let rows: Vec<String> = self.lsp.diagnostics.iter().map(|d| d.row.to_string()).collect();
+            self.xlc.add_output(&format!("diag rows: {}", rows.join(",")));
         }
     }
 

@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["xei-core", "xei"]
+members = ["xei-core", "xei", "suisei/src-tauri"]

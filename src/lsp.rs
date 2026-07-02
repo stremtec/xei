@@ -187,7 +187,12 @@ impl LspClient {
         if let Some(ref rx) = self.rx {
             loop {
                 match rx.try_recv() {
-                    Ok(LspMessage::Diagnostics(diags)) => self.diagnostics = diags,
+                    Ok(LspMessage::Diagnostics(diags)) => {
+                        for d in diags {
+                            self.diagnostics.retain(|x| x.row != d.row || x.col_start != d.col_start);
+                            self.diagnostics.push(d);
+                        }
+                    }
                     Ok(LspMessage::Definition { path, row, col }) => {
                         self.pending_definition = Some(Location { path: path.display().to_string(), row, col });
                     }

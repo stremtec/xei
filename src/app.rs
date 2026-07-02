@@ -713,6 +713,7 @@ impl App {
         self.save_state_to_tab();
         self.current_buffer = (self.current_buffer + 1) % self.buffers.len();
         self.restore_state_from_tab();
+        self.lsp_restart_for_current();
     }
 
     pub fn prev_tab(&mut self) {
@@ -726,6 +727,13 @@ impl App {
             self.current_buffer -= 1;
         }
         self.restore_state_from_tab();
+        self.lsp_restart_for_current();
+    }
+
+    fn lsp_restart_for_current(&mut self) {
+        if let Some(ref path) = self.filename {
+            self.lsp.auto_start(&path.display().to_string());
+        }
     }
 
     pub fn close_current_tab(&mut self) {

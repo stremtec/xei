@@ -339,22 +339,18 @@ fn render_line_with_highlights(
             }
         }
 
-        if char_style == base_style {
-            for diag in &app.lsp.diagnostics {
-                if diag.row == *row && i >= diag.col_start && i < diag.col_end {
-                    char_style = match diag.severity {
-                        crate::lsp::DiagnosticSeverity::Error => Style::default()
-                            .fg(Color::Red)
-                            .add_modifier(Modifier::UNDERLINED),
-                        crate::lsp::DiagnosticSeverity::Warning => Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::UNDERLINED),
-                        crate::lsp::DiagnosticSeverity::Info => Style::default()
-                            .fg(Color::Cyan),
-                        _ => Style::default().fg(Color::Gray),
-                    };
-                    break;
-                }
+        for diag in &app.lsp.diagnostics {
+            if diag.row == *row && i >= diag.col_start && i < diag.col_end {
+                char_style = match diag.severity {
+                    crate::lsp::DiagnosticSeverity::Error => char_style
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::UNDERLINED),
+                    crate::lsp::DiagnosticSeverity::Warning => char_style
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::UNDERLINED),
+                    _ => char_style,
+                };
+                break;
             }
         }
 

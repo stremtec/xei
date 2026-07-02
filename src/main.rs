@@ -40,17 +40,17 @@ fn main() -> io::Result<()> {
             }
             "--help" | "-h" => {
                 println!("xei (晴) — a modern Vim-like terminal editor\n");
-                println!("Usage: xei [FILE]         Open a file for editing");
-                println!("       xei --gui [FILE]    Open file in GPU-accelerated GUI");
-                println!("       xei --version       Print version");
-                println!("       xei --help          Show this help");
-                println!("       xei --debug FILE    Open with debug logging\n");
+                println!("Usage: xei [FILE]              Open a file for editing");
+                println!("       xei --desktop [FILE]    Open file in suisei desktop editor");
+                println!("       xei --version            Print version");
+                println!("       xei --help               Show this help");
+                println!("       xei --debug FILE         Open with debug logging\n");
                 println!("Homepage: https://github.com/stremtec/xei");
                 return Ok(());
             }
-            "--gui" => {
+            "--desktop" => {
                 let file = args.get(2).cloned();
-                gui::run_gui(file);
+                gui::run_desktop(file);
                 return Ok(());
             }
             _ => {}

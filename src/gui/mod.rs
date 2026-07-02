@@ -2,12 +2,12 @@ pub mod editor;
 
 use gpui::*;
 
-pub fn run_gui(file_path: Option<String>) {
+pub fn run_desktop(file_path: Option<String>) {
     Application::new().run(move |cx: &mut App| {
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
-                    title: Some("xei (晴)".into()),
+                    title: Some("suisei (彗星)".into()),
                     ..Default::default()
                 }),
                 window_bounds: Some(WindowBounds::Windowed(Bounds::centered(

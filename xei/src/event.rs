@@ -318,6 +318,80 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         return;
     }
 
+    // Handle pending f/F/t/T/r and digit count accumulation
+    if let KeyCode::Char(c) = code {
+        // f/F/t/T/r: pending char target
+        if let Some(op) = app.pending_ft.take() {
+            match op {
+                'f' => app.buffer.find_char_forward(c),
+                'F' => app.buffer.find_char_backward(c),
+                't' => app.buffer.till_char_forward(c),
+                'T' => app.buffer.till_char_backward(c),
+                'r' => app.buffer.replace_char(c),
+                _ => {}
+            }
+            app.update_scroll();
+            return;
+        }
+        // Count accumulation
+        if c.is_ascii_digit() && c != '0' {
+            let d = c.to_digit(10).unwrap() as usize;
+            app.count = Some(app.count.unwrap_or(0) * 10 + d);
+            return;
+        }
+        // If count was set and we get a non-digit, apply count to the command
+        let n = app.count.take().unwrap_or(1);
+        match c {
+            'f' | 'F' | 't' | 'T' | 'r' => {
+                app.pending_ft = Some(c);
+                return;
+            }
+            'c' => {
+                app.push_undo();
+                app.mode = Mode::Insert;
+            }
+            'C' => {
+                app.push_undo();
+                let pos = app.buffer.cursor;
+                let col = pos.col;
+                let line = app.buffer.line(pos.row).to_string();
+                if col < line.len() {
+                    app.buffer.set_line(pos.row, line[..col].to_string());
+                }
+                app.mode = Mode::Insert;
+                return;
+            }
+            'h' | 'j' | 'k' | 'l' | 'w' | 'b' => {
+                for _ in 0..n {
+                    match c {
+                        'h' => app.buffer.move_left(),
+                        'j' => app.buffer.move_down(),
+                        'k' => app.buffer.move_up(),
+                        'l' => app.buffer.move_right(),
+                        'w' => app.buffer.move_word_forward(),
+                        'b' => app.buffer.move_word_back(),
+                        _ => {}
+                    }
+                }
+                app.update_scroll();
+                return;
+            }
+            'x' => {
+                app.push_undo();
+                for _ in 0..n {
+                    if app.buffer.cursor.col < app.buffer.line(app.buffer.cursor.row).len() {
+                        app.buffer.delete_char_at_cursor();
+                    }
+                }
+                return;
+            }
+            'd' => { app.pending_key = Some('d'); app.count = Some(n); return; }
+            'y' => { app.pending_key = Some('y'); app.count = Some(n); return; }
+            'g' => { app.pending_key = Some('g'); app.count = Some(n); return; }
+            _ => {}
+        }
+    }
+
     match code {
         KeyCode::Char(':') => app.enter_xlc(None),
         KeyCode::Char('/') => app.enter_search(),
@@ -338,6 +412,42 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         KeyCode::Char('j') | KeyCode::Down => app.move_down(),
         KeyCode::Char('0') => app.buffer.move_to_line_start(),
         KeyCode::Char('$') => app.buffer.move_to_line_end(),
+        KeyCode::Char('^') => app.buffer.move_to_first_non_blank(),
+        KeyCode::Char('J') => {
+            app.push_undo();
+            app.buffer.join_lines();
+        }
+        KeyCode::Char('>') => {
+            app.push_undo();
+            app.buffer.indent_line();
+            app.buffer.move_to_first_non_blank();
+        }
+        KeyCode::Char('<') => {
+            app.push_undo();
+            app.buffer.dedent_line();
+            app.buffer.move_to_first_non_blank();
+        }
+        KeyCode::Char('P') => app.paste(),
+        KeyCode::Char('D') => {
+            app.push_undo();
+            let col = app.buffer.cursor.col;
+            let row = app.buffer.cursor.row;
+            let line_str = app.buffer.line(row);
+            if col < line_str.len() {
+                let line = app.buffer.line(row).to_string();
+                let prefix = &line[..col];
+                app.buffer.set_line(row, prefix.to_string());
+            }
+        }
+        KeyCode::Char('e') => {
+            let line = app.buffer.line(app.buffer.cursor.row).to_string();
+            let chars: Vec<char> = line.chars().collect();
+            let mut i = app.buffer.cursor.col;
+            while i < chars.len().saturating_sub(1) && !chars[i+1].is_alphanumeric() { i += 1; }
+            while i < chars.len().saturating_sub(1) && chars[i+1].is_alphanumeric() { i += 1; }
+            app.buffer.cursor.col = (i + 1).min(chars.len());
+            app.update_scroll();
+        }
         KeyCode::Char('w') => app.buffer.move_word_forward(),
         KeyCode::Char('b') => app.buffer.move_word_back(),
         KeyCode::Char('o') => {

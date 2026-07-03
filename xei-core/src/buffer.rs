@@ -414,6 +414,87 @@ impl Buffer {
         self.lines = snapshot.lines.clone();
         self.cursor = snapshot.cursor;
     }
+
+    // ── In-line character search ──────────────────────
+
+    pub fn find_char_forward(&mut self, ch: char) {
+        let line = self.line(self.cursor.row);
+        if let Some(pos) = line[self.cursor.col+1..].find(ch) {
+            self.cursor.col += pos + 1;
+        }
+    }
+
+    pub fn find_char_backward(&mut self, ch: char) {
+        if self.cursor.col > 0 {
+            let line = self.line(self.cursor.row);
+            if let Some(pos) = line[..self.cursor.col].rfind(ch) {
+                self.cursor.col = pos;
+            }
+        }
+    }
+
+    pub fn till_char_forward(&mut self, ch: char) {
+        let line = self.line(self.cursor.row);
+        if let Some(pos) = line[self.cursor.col+1..].find(ch) {
+            if pos > 0 { self.cursor.col += pos; }
+        }
+    }
+
+    pub fn till_char_backward(&mut self, ch: char) {
+        if self.cursor.col > 1 {
+            let line = self.line(self.cursor.row);
+            if let Some(pos) = line[..self.cursor.col-1].rfind(ch) {
+                self.cursor.col = pos + 1;
+            }
+        }
+    }
+
+    // ── Replace ────────────────────────────────────────
+
+    pub fn replace_char(&mut self, ch: char) {
+        let line = self.line(self.cursor.row);
+        if self.cursor.col < line.len() {
+            self.lines[self.cursor.row].replace_range(
+                self.cursor.col..self.cursor.col + ch.len_utf8(),
+                &ch.to_string()
+            );
+        }
+    }
+
+    // ── Indent / Dedent ────────────────────────────────
+
+    pub fn indent_line(&mut self) {
+        self.lines[self.cursor.row].insert_str(0, "    ");
+    }
+
+    pub fn dedent_line(&mut self) {
+        let line = &self.lines[self.cursor.row];
+        if line.starts_with("    ") {
+            self.lines[self.cursor.row] = line[4..].to_string();
+            if self.cursor.col >= 4 { self.cursor.col -= 4; } else { self.cursor.col = 0; }
+        } else if line.starts_with('\t') {
+            self.lines[self.cursor.row] = line[1..].to_string();
+            if self.cursor.col > 0 { self.cursor.col -= 1; }
+        }
+    }
+
+    // ── Join lines ─────────────────────────────────────
+
+    pub fn join_lines(&mut self) {
+        if self.cursor.row + 1 < self.lines.len() {
+            let next = self.lines.remove(self.cursor.row + 1);
+            let current_len = self.lines[self.cursor.row].len();
+            self.lines[self.cursor.row].push_str(&next);
+            self.cursor.col = current_len;
+        }
+    }
+
+    // ── First non-blank ────────────────────────────────
+
+    pub fn move_to_first_non_blank(&mut self) {
+        let line = self.line(self.cursor.row);
+        self.cursor.col = line.chars().position(|c| c != ' ' && c != '\t').unwrap_or(0);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

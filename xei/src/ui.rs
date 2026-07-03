@@ -501,6 +501,12 @@ fn draw_completions(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
+    // Drop shadow behind completion popup
+    f.render_widget(
+        Block::default().style(Style::default().bg(Color::Black)),
+        Rect { x: popup_x + 1, y: popup_y + 1, width: popup_width, height: max_height + 2 },
+    );
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(app.theme.completion_border))

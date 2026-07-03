@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>suisei (彗星)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1b26;color:#c0caf5;font:14px/1.6 'SF Mono','Fira Code',monospace;overflow:hidden;height:100vh}
+#app{display:flex;flex-direction:column;height:100%}
+#tabs{display:flex;height:24px;background:#1a1b26;flex-shrink:0}
+.tab{padding:2px 12px;font-size:12px;background:#1a1b26;color:#565f89;cursor:pointer}
+.tab.active{background:#24283b;color:#c0caf5}
+#main{display:flex;flex:1;overflow:hidden}
+#explorer{width:200px;overflow-y:auto;background:#1a1b26;border-right:1px solid #24283b;flex-shrink:0;display:none}
+#explorer.visible{display:block}
+.explorer-cwd{padding:4px 8px;color:#7aa2f7;font-weight:bold;font-size:13px}
+.explorer-entry{padding:2px 8px;font-size:13px;cursor:pointer;display:flex;gap:4px}
+.explorer-entry.selected{background:rgba(255,255,255,0.07)}
+#editor-wrap{flex:1;display:flex;overflow:hidden}
+#gutter{width:60px;overflow:hidden;text-align:right;padding-right:8px;color:#565f89;user-select:none;flex-shrink:0;background:#1a1b26}
+#lines{flex:1;overflow:hidden;background:#1a1b26}
+.gutter-line{padding:0 4px}
+.editor-line{display:flex;white-space:pre;height:22px}
+.editor-line.active{background:rgba(255,255,255,0.06)}
+.editor-line.visual{background:rgba(100,100,255,0.2)}
+.text{flex:1}
+.cursor-block{background:#7dcfff;color:#1a1b26}
+.cursor-bar{border-left:2px solid #7dcfff}
+#terminal{width:300px;background:#0f0f1a;overflow-y:auto;flex-shrink:0;display:none;font-size:12px;line-height:1.3}
+#terminal.visible{display:block}
+.term-header{padding:2px 8px;font-size:11px;background:#24283b;color:#565f89}
+.term-row{white-space:pre;padding:0 4px}
+#xlc{display:none;border-top:1px solid #24283b;background:#1a1b26;max-height:120px;overflow-y:auto;flex-shrink:0}
+#xlc.visible{display:block}
+.xlc-out{padding:2px 12px;font-size:12px;color:#a9b1d6}
+.xlc-inp{padding:4px 12px;display:flex;gap:4px}
+.xlc-prompt{color:#7aa2f7}
+#status{display:flex;justify-content:space-between;align-items:center;height:24px;padding:0 12px;background:#24283b;color:#a9b1d6;font-size:12px;flex-shrink:0}
+.status-left,.status-right{display:flex;gap:12px;align-items:center}
+#mode{font-weight:bold}
+.diag{color:#f7768e}
+.resize-handle{width:4px;cursor:col-resize;background:#24283b;flex-shrink:0}
+.resize-handle:hover{background:#7aa2f7}
+</style></head>
+<body>
+<div id="app">
+  <div id="tabs"></div>
+  <div id="main">
+    <div id="explorer"></div>
+    <div class="resize-handle" id="explorer-resize"></div>
+    <div id="editor-wrap">
+      <div id="gutter"></div>
+      <div id="lines"></div>
+    </div>
+    <div class="resize-handle" id="term-resize" style="display:none"></div>
+    <div id="terminal"></div>
+  </div>
+  <div id="xlc"></div>
+  <div id="status">
+    <div class="status-left"><span id="mode">NORMAL</span><span id="file">&nbsp;</span></div>
+    <div class="status-right"><span id="diags"></span><span id="lang"></span><span id="cursor"></span></div>
+  </div>
+</div>
+<script>
+const { invoke } = window.__TAURI__?.core || window.__TAURI_INTERNALS__ || {};
+if (!invoke) document.body.innerHTML = '<div style="padding:20px;color:red">Tauri API not loaded. Run inside Tauri app.</div>';
+else (async function() {
+  let state = null;
+
+  async function getState() {
+    try { state = await invoke("get_state"); } catch(e) { console.error(e); state = null; }
+  }
+
+  async function sendKey(e) {
+    e.preventDefault();
+    try {
+      await invoke("handle_key", {
+        key: e.key, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey, meta: e.metaKey
+      });
+      await getState();
+      render();
+    } catch(ee) { console.error(ee); }
+  }
+
+  function render() {
+    if (!state) return;
+
+    // Tabs
+    let tabsHtml = (state.tabs||[]).map((t,i) =>
+      `<div class="tab${i===state.current_tab?' active':''}">${t.filename||'[no name]'}${t.modified?' +':''}</div>`
+    ).join('');
+    document.getElementById('tabs').innerHTML = tabsHtml;
+
+    // Explorer
+    let exp = document.getElementById('explorer');
+    let resize = document.getElementById('explorer-resize');
+    if (state.explorer_open) {
+      exp.classList.add('visible');
+      let entriesHtml = (state.explorer_entries||[]).map((e,i) =>
+        `<div class="explorer-entry${i===state.explorer_selected?' selected':''}">
+          <span>${e.is_dir?'📁':'📄'}</span>${e.name}
+        </div>`
+      ).join('');
+      exp.innerHTML = `<div class="explorer-cwd">📂 ${(state.explorer_cwd||'').split('/').pop()}</div>${entriesHtml}`;
+    } else {
+      exp.classList.remove('visible');
+    }
+
+    // Terminal
+    let term = document.getElementById('terminal');
+    let termResize = document.getElementById('term-resize');
+    if (state.terminal_open && (state.terminal_rows||[]).length > 0) {
+      term.classList.add('visible');
+      termResize.style.display = 'block';
+      let rowsHtml = (state.terminal_rows||[]).map(row =>
+        `<div class="term-row">${row.map(c=>c.ch||'').join('')}</div>`
+      ).join('');
+      term.innerHTML = `<div class="term-header">TERMINAL ${state.mode==='Terminal'?'[Esc to exit]':''}</div>${rowsHtml}`;
+    } else {
+      term.classList.remove('visible');
+      termResize.style.display = 'none';
+    }
+
+    // Editor
+    let lines = state.lines || [];
+    let sc = state.scroll || 0;
+    let cr = state.cursor_row || 0;
+    let cc = state.cursor_col || 0;
+    let mode = state.mode || 'Normal';
+    let visLines = 50;
+    let gutterHtml = '';
+    let linesHtml = '';
+    for (let i = sc; i < Math.min(sc + visLines, lines.length); i++) {
+      let row = i;
+      let isCur = row === cr;
+      gutterHtml += `<div class="gutter-line" style="background:${isCur?'rgba(255,255,255,0.06)':''}">${String(row+1).padStart(3,' ')} </div>`;
+      if (isCur) {
+        let before = (lines[row]||'').slice(0, cc);
+        let at = (lines[row]||'')[cc] || ' ';
+        let after = (lines[row]||'').slice(cc + 1);
+        let isInsert = mode === 'Insert';
+        linesHtml += `<div class="editor-line active"><span class="text">${esc(before)}<span class="${isInsert?'cursor-bar':'cursor-block'}">${esc(at)}</span>${esc(after)}</span></div>`;
+      } else {
+        let isVis = (mode === 'Visual' || mode === 'VisualLine') && row === cr;
+        linesHtml += `<div class="editor-line${isVis?' visual':''}"><span class="text">${esc(lines[row]||'')}</span></div>`;
+      }
+    }
+    if (lines.length === 0) {
+      gutterHtml += '<div class="gutter-line">  1 </div>';
+      linesHtml += '<div class="editor-line"><span class="text">~</span></div>';
+    }
+    document.getElementById('gutter').innerHTML = gutterHtml;
+    document.getElementById('lines').innerHTML = linesHtml;
+
+    // XLC
+    let xlc = document.getElementById('xlc');
+    if (state.xlc_open) {
+      xlc.classList.add('visible');
+      let outHtml = (state.xlc_output||[]).slice(-10).map(l => `<div class="xlc-out">${esc(l)}</div>`).join('');
+      let prompt = state.search_pattern ? '/' : ':';
+      xlc.innerHTML = `${outHtml}<div class="xlc-inp"><span class="xlc-prompt">${prompt}</span><span>${esc(state.xlc_input||'')}</span></div>`;
+    } else {
+      xlc.classList.remove('visible');
+    }
+
+    // Status bar
+    let modeText = state.pending_key ? state.pending_key.toUpperCase() :
+      mode==='Normal'?'NORMAL':mode==='Insert'?'INSERT':mode==='Visual'?'VISUAL':
+      mode==='VisualLine'?'V-LINE':mode==='Explorer'?'EXPLORER':mode==='Terminal'?'TERMINAL':
+      mode==='XlcInput'?'COMMAND':mode;
+    let modeColor = mode==='Insert'?'#9ece6a':mode==='Visual'||mode==='VisualLine'?'#e0af68':
+      mode==='Explorer'||mode==='Terminal'?'#7dcfff':'#7aa2f7';
+    let fn = (state.filename||'').split('/').pop() || '[no name]';
+    document.getElementById('mode').textContent = modeText;
+    document.getElementById('mode').style.color = modeColor;
+    document.getElementById('file').textContent = fn + (state.modified?' +':'');
+    document.getElementById('diags').textContent = (state.lsp_diagnostics||0) > 0 ? `${state.lsp_diagnostics} issues` : '';
+    document.getElementById('lang').textContent = (state.filename||'').split('.').pop() || 'txt';
+    document.getElementById('cursor').textContent = `${cr+1}:${cc+1}`;
+  }
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // Init
+  await getState();
+  render();
+
+  // Periodic refresh
+  setInterval(async () => { await getState(); render(); }, 300);
+
+  // Keyboard
+  document.addEventListener('keydown', sendKey);
+
+  // Explorer resize
+  let expResize = document.getElementById('explorer-resize');
+  let explorer = document.getElementById('explorer');
+  let termResize = document.getElementById('term-resize');
+  let terminal = document.getElementById('terminal');
+  let editorWrap = document.getElementById('editor-wrap');
+
+  let dragInfo = null;
+  function startResize(panel, e) {
+    e.preventDefault();
+    dragInfo = { panel, startX: e.clientX, startW: parseInt(panel.style.width||'200') };
+    document.addEventListener('mousemove', onResize);
+    document.addEventListener('mouseup', stopResize);
+  }
+  function onResize(e) {
+    if (!dragInfo) return;
+    let dw = e.clientX - dragInfo.startX;
+    let newW = Math.max(100, Math.min(400, dragInfo.startW + dw));
+    if (dragInfo.panel === document.getElementById('explorer')) {
+      document.getElementById('explorer').style.width = newW + 'px';
+    } else {
+      document.getElementById('terminal').style.width = newW + 'px';
+    }
+  }
+  function stopResize() {
+    dragInfo = null;
+    document.removeEventListener('mousemove', onResize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+
+  expResize.addEventListener('mousedown', (e) => startResize(explorer, e));
+  termResize.addEventListener('mousedown', (e) => startResize(terminal, e));
+})();
+</script></body></html>

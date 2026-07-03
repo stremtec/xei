@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, BorderType, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 use unicode_width::UnicodeWidthChar;
@@ -402,6 +402,11 @@ fn draw_pending_hints(f: &mut Frame, app: &App, area: Rect) {
 
     let popup = Rect { x: cx, y: cy, width: popup_w, height: popup_h };
 
+    // Frosted glass: shadow + rounded border + translucent bg
+    let shadow = Rect { x: cx + 1, y: cy + 1, width: popup_w, height: popup_h };
+    f.render_widget(Block::default().style(Style::default().bg(Color::Black)), shadow);
+
+    let glass_bg = Color::Rgb(40, 43, 60);
     let items: Vec<Line> = hints.iter().map(|(key, desc)| {
         Line::from(vec![
             Span::styled(format!(" {} ", key), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
@@ -411,9 +416,10 @@ fn draw_pending_hints(f: &mut Frame, app: &App, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(app.theme.border))
-        .style(Style::default().bg(app.theme.completion_bg))
-        .title(Span::styled(" hints ", Style::default().fg(app.theme.border)));
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Rgb(90, 95, 120)))
+        .style(Style::default().bg(glass_bg))
+        .title(Span::styled(" hints ", Style::default().fg(Color::Rgb(130, 140, 170))));
 
     f.render_widget(Clear, popup);
     f.render_widget(Paragraph::new(items).block(block), popup);
@@ -501,19 +507,21 @@ fn draw_completions(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    // Drop shadow behind completion popup
+    // Frosted glass shadow
     f.render_widget(
         Block::default().style(Style::default().bg(Color::Black)),
         Rect { x: popup_x + 1, y: popup_y + 1, width: popup_width, height: max_height + 2 },
     );
 
+    let glass_bg = Color::Rgb(35, 38, 55);
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(app.theme.completion_border))
-        .style(Style::default().bg(app.theme.completion_bg))
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Rgb(90, 95, 120)))
+        .style(Style::default().bg(glass_bg))
         .title(Span::styled(
             format!(" {} ({}) ", app.file_name(), suggestions.len()),
-            Style::default().fg(app.theme.completion_border),
+            Style::default().fg(Color::Rgb(130, 140, 170)),
         ));
 
     let popup = Paragraph::new(items).block(block);

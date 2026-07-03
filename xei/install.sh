@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="stremtec/xei"
-VERSION="${VERSION:-v2.4.1}"
+VERSION="${VERSION:-v2.5.0}"
 
 case "$(uname -s)" in
   Darwin)

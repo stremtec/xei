@@ -4825,7 +4825,7 @@ dependencies = [
 
 [[package]]
 name = "xei-core"
-version = "2.4.1"
+version = "2.5.0"
 dependencies = [
  "ratatui",
  "tree-sitter",
@@ -4838,7 +4838,7 @@ dependencies = [
 
 [[package]]
 name = "xei-editor"
-version = "2.4.1"
+version = "2.5.0"
 dependencies = [
  "crossterm",
  "ratatui",

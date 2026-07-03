@@ -1,5 +1,5 @@
 use std::env;
-use std::io::{self, Write};
+use std::io;
 
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -89,10 +89,7 @@ fn run_app(
     app: &mut App,
 ) -> io::Result<()> {
     while app.running {
-        // DEC 2026 synchronized updates — eliminate screen tearing
-        let _ = write!(io::stdout(), "\x1b[?2026h");
         terminal.draw(|f| ui::draw(f, app))?;
-        let _ = write!(io::stdout(), "\x1b[?2026l");
         if !event::handle_events(app)? {
             break;
         }

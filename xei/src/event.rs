@@ -342,7 +342,7 @@ fn handle_normal(app: &mut App, code: KeyCode) {
         // If count was set and we get a non-digit, apply count to the command
         let n = app.count.take().unwrap_or(1);
         match c {
-            'f' | 'F' | 't' | 'T' | 'r' => {
+            'f' | 'F' | 'T' | 'r' => {
                 app.pending_ft = Some(c);
                 return;
             }
@@ -385,9 +385,30 @@ fn handle_normal(app: &mut App, code: KeyCode) {
                 }
                 return;
             }
-            'd' => { app.pending_key = Some('d'); app.count = Some(n); return; }
-            'y' => { app.pending_key = Some('y'); app.count = Some(n); return; }
-            'g' => { app.pending_key = Some('g'); app.count = Some(n); return; }
+            'd' => {
+                app.pending_key = Some('d');
+                app.pending_hints = vec![("dd", "delete line"), ("dw", "delete word")];
+                app.message = String::from("-- PENDING: d --");
+                return;
+            }
+            'y' => {
+                app.pending_key = Some('y');
+                app.pending_hints = vec![("yy", "yank line")];
+                app.message = String::from("-- PENDING: y --");
+                return;
+            }
+            'g' => {
+                app.pending_key = Some('g');
+                app.pending_hints = vec![("gg", "go to top"), ("gd", "go to def (LSP)"), ("gT", "prev tab")];
+                app.message = String::from("-- PENDING: g --");
+                return;
+            }
+            't' => {
+                app.pending_key = Some('t');
+                app.pending_hints = vec![("tt", "next tab"), ("tT", "prev tab")];
+                app.message = String::from("-- PENDING: t --");
+                return;
+            }
             _ => {}
         }
     }
@@ -467,18 +488,8 @@ fn handle_normal(app: &mut App, code: KeyCode) {
             app.push_undo();
             app.buffer.delete_char_at_cursor();
         }
-        KeyCode::Char('d') => {
-            app.pending_key = Some('d');
-            app.pending_hints = vec![("dd", "delete line"), ("dw", "delete word")];
-            app.message = String::from("-- PENDING: d --");
-        }
         KeyCode::Char('p') => app.paste(),
         KeyCode::Char('u') => app.undo(),
-        KeyCode::Char('t') => {
-            app.pending_key = Some('t');
-            app.pending_hints = vec![("tt", "next tab"), ("tT", "previous tab")];
-            app.message = String::from("-- PENDING: t --");
-        }
         KeyCode::Char('n') => app.search_next(),
         KeyCode::Char('N') => app.search_prev(),
         KeyCode::Char('G') => {
@@ -486,11 +497,6 @@ fn handle_normal(app: &mut App, code: KeyCode) {
             app.buffer.cursor.row = last_row;
             app.buffer.move_to_line_start();
             app.update_scroll();
-        }
-        KeyCode::Char('g') => {
-            app.pending_key = Some('g');
-            app.pending_hints = vec![("gg", "go to top"), ("gd", "go to def (LSP)"), ("gT", "prev tab")];
-            app.message = String::from("-- PENDING: g --");
         }
         _ => {}
     }

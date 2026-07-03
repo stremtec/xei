@@ -419,32 +419,40 @@ impl Buffer {
 
     pub fn find_char_forward(&mut self, ch: char) {
         let line = self.line(self.cursor.row);
-        if let Some(pos) = line[self.cursor.col+1..].find(ch) {
-            self.cursor.col += pos + 1;
+        if self.cursor.col + 1 < line.len() {
+            if let Some(pos) = line[self.cursor.col + 1..].find(ch) {
+                self.cursor.col += pos + 1;
+            }
         }
     }
 
     pub fn find_char_backward(&mut self, ch: char) {
         if self.cursor.col > 0 {
             let line = self.line(self.cursor.row);
-            if let Some(pos) = line[..self.cursor.col].rfind(ch) {
-                self.cursor.col = pos;
+            if self.cursor.col <= line.len() {
+                if let Some(pos) = line[..self.cursor.col].rfind(ch) {
+                    self.cursor.col = pos;
+                }
             }
         }
     }
 
     pub fn till_char_forward(&mut self, ch: char) {
         let line = self.line(self.cursor.row);
-        if let Some(pos) = line[self.cursor.col+1..].find(ch) {
-            if pos > 0 { self.cursor.col += pos; }
+        if self.cursor.col + 1 < line.len() {
+            if let Some(pos) = line[self.cursor.col + 1..].find(ch) {
+                if pos > 0 { self.cursor.col += pos; }
+            }
         }
     }
 
     pub fn till_char_backward(&mut self, ch: char) {
         if self.cursor.col > 1 {
             let line = self.line(self.cursor.row);
-            if let Some(pos) = line[..self.cursor.col-1].rfind(ch) {
-                self.cursor.col = pos + 1;
+            if self.cursor.col - 1 <= line.len() {
+                if let Some(pos) = line[..self.cursor.col - 1].rfind(ch) {
+                    self.cursor.col = pos + 1;
+                }
             }
         }
     }
@@ -452,12 +460,9 @@ impl Buffer {
     // ── Replace ────────────────────────────────────────
 
     pub fn replace_char(&mut self, ch: char) {
-        let line = self.line(self.cursor.row);
-        if self.cursor.col < line.len() {
-            self.lines[self.cursor.row].replace_range(
-                self.cursor.col..self.cursor.col + ch.len_utf8(),
-                &ch.to_string()
-            );
+        if self.cursor.col < self.line(self.cursor.row).len() {
+            self.lines[self.cursor.row].remove(self.cursor.col);
+            self.lines[self.cursor.row].insert(self.cursor.col, ch);
         }
     }
 

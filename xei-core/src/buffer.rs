@@ -172,6 +172,17 @@ impl Buffer {
         self.cursor.col += 1;
     }
 
+    /// Insert multi-line text at the cursor (snippets / paste-like).
+    pub fn insert_str(&mut self, s: &str) {
+        for ch in s.chars() {
+            if ch == '\n' {
+                self.insert_newline();
+            } else {
+                self.insert_char(ch);
+            }
+        }
+    }
+
     pub fn insert_char_pair(&mut self, open: char, close: char) {
         let line = &mut self.lines[self.cursor.row];
         let byte_idx = char_to_byte(self.cursor.col, line);
@@ -245,7 +256,8 @@ impl Buffer {
 
         self.lines.insert(current_row + 1, new_line);
         self.cursor.row += 1;
-        self.cursor.col = indent.len() + if extra_indent { 4 } else { 0 };
+        // cursor.col is a char index
+        self.cursor.col = indent.chars().count() + if extra_indent { 4 } else { 0 };
     }
 
     pub fn leading_indent(&self, row: usize) -> String {
@@ -415,71 +427,89 @@ impl Buffer {
         self.cursor = snapshot.cursor;
     }
 
-    // ── In-line character search ──────────────────────
+    // ── In-line character search (char indices, UTF-8 safe) ──
 
     pub fn find_char_forward(&mut self, ch: char) {
-        let line = self.line(self.cursor.row);
-        if self.cursor.col + 1 < line.len() {
-            if let Some(pos) = line[self.cursor.col + 1..].find(ch) {
-                self.cursor.col += pos + 1;
-            }
+        let chars: Vec<char> = self.line(self.cursor.row).chars().collect();
+        if self.cursor.col + 1 >= chars.len() {
+            return;
+        }
+        if let Some(rel) = chars[self.cursor.col + 1..].iter().position(|c| *c == ch) {
+            self.cursor.col = self.cursor.col + 1 + rel;
         }
     }
 
     pub fn find_char_backward(&mut self, ch: char) {
-        if self.cursor.col > 0 {
-            let line = self.line(self.cursor.row);
-            if self.cursor.col <= line.len() {
-                if let Some(pos) = line[..self.cursor.col].rfind(ch) {
-                    self.cursor.col = pos;
-                }
-            }
+        if self.cursor.col == 0 {
+            return;
+        }
+        let chars: Vec<char> = self.line(self.cursor.row).chars().collect();
+        let end = self.cursor.col.min(chars.len());
+        if let Some(pos) = chars[..end].iter().rposition(|c| *c == ch) {
+            self.cursor.col = pos;
         }
     }
 
     pub fn till_char_forward(&mut self, ch: char) {
-        let line = self.line(self.cursor.row);
-        if self.cursor.col + 1 < line.len() {
-            if let Some(pos) = line[self.cursor.col + 1..].find(ch) {
-                if pos > 0 { self.cursor.col += pos; }
+        let chars: Vec<char> = self.line(self.cursor.row).chars().collect();
+        if self.cursor.col + 1 >= chars.len() {
+            return;
+        }
+        if let Some(rel) = chars[self.cursor.col + 1..].iter().position(|c| *c == ch) {
+            if rel > 0 {
+                self.cursor.col = self.cursor.col + rel;
             }
         }
     }
 
     pub fn till_char_backward(&mut self, ch: char) {
-        if self.cursor.col > 1 {
-            let line = self.line(self.cursor.row);
-            if self.cursor.col - 1 <= line.len() {
-                if let Some(pos) = line[..self.cursor.col - 1].rfind(ch) {
-                    self.cursor.col = pos + 1;
-                }
-            }
+        if self.cursor.col <= 1 {
+            return;
+        }
+        let chars: Vec<char> = self.line(self.cursor.row).chars().collect();
+        let end = self.cursor.col.saturating_sub(1).min(chars.len());
+        if let Some(pos) = chars[..end].iter().rposition(|c| *c == ch) {
+            self.cursor.col = pos + 1;
         }
     }
 
     // ── Replace ────────────────────────────────────────
 
     pub fn replace_char(&mut self, ch: char) {
-        if self.cursor.col < self.line(self.cursor.row).len() {
-            self.lines[self.cursor.row].remove(self.cursor.col);
-            self.lines[self.cursor.row].insert(self.cursor.col, ch);
+        let line = &self.lines[self.cursor.row];
+        let len = line.chars().count();
+        if self.cursor.col >= len {
+            return;
         }
+        let start = char_to_byte(self.cursor.col, line);
+        let end = char_to_byte(self.cursor.col + 1, line);
+        let mut new_line = String::new();
+        new_line.push_str(&line[..start]);
+        new_line.push(ch);
+        new_line.push_str(&line[end..]);
+        self.lines[self.cursor.row] = new_line;
     }
 
     // ── Indent / Dedent ────────────────────────────────
 
     pub fn indent_line(&mut self) {
         self.lines[self.cursor.row].insert_str(0, "    ");
+        self.cursor.col += 4;
     }
 
     pub fn dedent_line(&mut self) {
         let line = &self.lines[self.cursor.row];
         if line.starts_with("    ") {
             self.lines[self.cursor.row] = line[4..].to_string();
-            if self.cursor.col >= 4 { self.cursor.col -= 4; } else { self.cursor.col = 0; }
+            self.cursor.col = self.cursor.col.saturating_sub(4);
+        } else if line.starts_with(' ') {
+            let spaces = line.chars().take_while(|c| *c == ' ').count().min(4);
+            let byte = char_to_byte(spaces, line);
+            self.lines[self.cursor.row] = line[byte..].to_string();
+            self.cursor.col = self.cursor.col.saturating_sub(spaces);
         } else if line.starts_with('\t') {
             self.lines[self.cursor.row] = line[1..].to_string();
-            if self.cursor.col > 0 { self.cursor.col -= 1; }
+            self.cursor.col = self.cursor.col.saturating_sub(1);
         }
     }
 
@@ -488,9 +518,24 @@ impl Buffer {
     pub fn join_lines(&mut self) {
         if self.cursor.row + 1 < self.lines.len() {
             let next = self.lines.remove(self.cursor.row + 1);
-            let current_len = self.lines[self.cursor.row].len();
-            self.lines[self.cursor.row].push_str(&next);
-            self.cursor.col = current_len;
+            let next_trim = next.trim_start();
+            let current_len = self.lines[self.cursor.row].chars().count();
+            let cur = &mut self.lines[self.cursor.row];
+            if !cur.is_empty() && !cur.ends_with(' ') && !next_trim.is_empty() {
+                cur.push(' ');
+            }
+            cur.push_str(next_trim);
+            self.cursor.col = if next_trim.is_empty() {
+                current_len
+            } else if current_len > 0 {
+                current_len // space is at current_len if we added one... simplified:
+            } else {
+                0
+            };
+            // Place cursor on the joining space (vim-like)
+            if !next_trim.is_empty() && current_len > 0 {
+                self.cursor.col = current_len; // on the space we may have inserted
+            }
         }
     }
 
@@ -783,5 +828,34 @@ mod tests {
         assert_eq!(buf.line(0), "hello!x");
         buf.restore(&snap);
         assert_eq!(buf.line(0), "hello!");
+    }
+
+    #[test]
+    fn test_find_char_utf8() {
+        let mut buf = Buffer::from_string("한a글b");
+        buf.cursor = Position::new(0, 0);
+        buf.find_char_forward('글');
+        assert_eq!(buf.cursor.col, 2);
+        buf.find_char_forward('b');
+        assert_eq!(buf.cursor.col, 3);
+        buf.find_char_backward('a');
+        assert_eq!(buf.cursor.col, 1);
+    }
+
+    #[test]
+    fn test_replace_char_utf8() {
+        let mut buf = Buffer::from_string("한x글");
+        buf.cursor = Position::new(0, 1);
+        buf.replace_char('야');
+        assert_eq!(buf.line(0), "한야글");
+    }
+
+    #[test]
+    fn test_join_lines() {
+        let mut buf = Buffer::from_string("hello\nworld");
+        buf.cursor = Position::new(0, 0);
+        buf.join_lines();
+        assert_eq!(buf.line(0), "hello world");
+        assert_eq!(buf.line_count(), 1);
     }
 }

@@ -14,7 +14,7 @@ impl Default for Xlc {
         Self {
             open: false,
             input: String::new(),
-            output: vec!["xei Line Command — :help for commands".to_string()],
+            output: vec!["xei Line Command — :help · :screensaver · :pet".to_string()],
             history: Vec::new(),
             history_index: 0,
             scroll_offset: 0,
@@ -119,6 +119,7 @@ pub enum XlcCmd {
     None,
     Save,
     SaveAs(String),
+    SaveAndQuit,
     Quit,
     ForceQuit,
     Open(String),
@@ -132,6 +133,43 @@ pub enum XlcCmd {
     Theme(String),
     BufDelete,
     LspStart(String),
+    GotoLine(usize),
+    Problems,
+    /// `:s/.../` or `:%s/.../`
+    Substitute(String),
+    /// `:Rename new_name` LSP rename
+    LspRename(String),
+    /// `:preview` pretty document view
+    Preview,
+    /// `:gh-login` / `:gha` GitHub auth helpers
+    GhLogin,
+    GhLogout,
+    GhStatus,
+    GitWorkbench,
+    Settings,
+    /// `:screensaver` / `:xeifetch` — themed splash + clock + weather
+    Screensaver,
+    /// `:pet [path]` — load desktop pet GIF (empty = status)
+    Pet(String),
+    /// DAP debug
+    DapStart,
+    DapStop,
+    DapLaunch(String),
+    DapBreakpoint,
+    DapPanel,
+    DapCondition(String),
+    DapLogpoint(String),
+    DapConfig(Option<String>),
+    DapEval(String),
+    DapAttach(String),
+    /// Interactive rebase last N commits
+    Rebase(usize),
+    RebaseAbort,
+    RebaseContinue,
+    CallHierarchy,
+    CodeLens,
+    PrReview(u64),
+    HooksReload,
 }
 
 fn parse_command(input: &str) -> XlcCmd {
@@ -149,7 +187,7 @@ fn parse_command(input: &str) -> XlcCmd {
         }
         "q" | "quit" => XlcCmd::Quit,
         "q!" | "quit!" => XlcCmd::ForceQuit,
-        "wq" | "x" => XlcCmd::Save,
+        "wq" | "x" => XlcCmd::SaveAndQuit,
         "e" | "open" if !arg.is_empty() => XlcCmd::Open(arg.to_string()),
         "mv" | "move" if !arg.is_empty() => XlcCmd::Move(arg.to_string()),
         "rename" if !arg.is_empty() => XlcCmd::Rename(arg.to_string()),
@@ -160,22 +198,86 @@ fn parse_command(input: &str) -> XlcCmd {
         "find" | "/" if !arg.is_empty() => XlcCmd::Search(arg.to_string()),
         "theme" => XlcCmd::Theme(arg.to_string()),
         "bd" => XlcCmd::BufDelete,
+        "problems" | "diag" => XlcCmd::Problems,
+        "preview" | "Preview" => XlcCmd::Preview,
+        "gh-login" | "gha" | "ghlogin" => XlcCmd::GhLogin,
+        "gh-logout" | "ghlogout" => XlcCmd::GhLogout,
+        "gh-status" | "ghstatus" => XlcCmd::GhStatus,
+        "git" | "Git" => XlcCmd::GitWorkbench,
+        "settings" | "set" | "Settings" => XlcCmd::Settings,
+        "screensaver" | "xeifetch" | "fetch" | "ss" => XlcCmd::Screensaver,
+        "pet" => XlcCmd::Pet(arg.to_string()),
+        "dap" | "debug" if arg.is_empty() => XlcCmd::DapPanel,
+        "dap" | "debug" if arg == "start" || arg == "run" => XlcCmd::DapStart,
+        "dap" | "debug" if arg == "stop" => XlcCmd::DapStop,
+        "dap" | "debug" if arg == "bp" || arg == "break" => XlcCmd::DapBreakpoint,
+        "DapLaunch" | "dap-launch" | "launch" if !arg.is_empty() => {
+            XlcCmd::DapLaunch(arg.to_string())
+        }
+        "bp" | "break" if arg.is_empty() => XlcCmd::DapBreakpoint,
+        "bp" | "break" if arg.starts_with("if ") => {
+            XlcCmd::DapCondition(arg.trim_start_matches("if ").trim().to_string())
+        }
+        "bp" | "break" if arg.starts_with("log ") => {
+            XlcCmd::DapLogpoint(arg.trim_start_matches("log ").trim().to_string())
+        }
+        "bp" | "break" => XlcCmd::DapBreakpoint,
+        "DapConfig" | "dap-config" | "launch-config" if arg.is_empty() => XlcCmd::DapConfig(None),
+        "DapConfig" | "dap-config" | "launch-config" => {
+            XlcCmd::DapConfig(Some(arg.to_string()))
+        }
+        "eval" | "DapEval" if !arg.is_empty() => XlcCmd::DapEval(arg.to_string()),
+        "DapAttach" | "dap-attach" | "attach" if !arg.is_empty() => {
+            XlcCmd::DapAttach(arg.to_string())
+        }
+        "rebase" => {
+            let n = if arg.is_empty() {
+                5
+            } else {
+                arg.parse().unwrap_or(5)
+            };
+            XlcCmd::Rebase(n)
+        }
+        "rebase-abort" | "rebase!" => XlcCmd::RebaseAbort,
+        "rebase-continue" | "rebase-cont" => XlcCmd::RebaseContinue,
+        "calls" | "callers" | "hierarchy" => XlcCmd::CallHierarchy,
+        "codelens" | "lens" => XlcCmd::CodeLens,
+        "pr" | "review" if !arg.is_empty() => {
+            let n = arg.trim_start_matches('#').parse().unwrap_or(0);
+            XlcCmd::PrReview(n)
+        }
+        "hooks" | "hooks-reload" => XlcCmd::HooksReload,
         "lsp" | "LspStart" if !arg.is_empty() => XlcCmd::LspStart(arg.to_string()),
+        "Rename" | "rename" if !arg.is_empty() => XlcCmd::LspRename(arg.to_string()),
+        other if !other.is_empty() && other.chars().all(|c| c.is_ascii_digit()) => {
+            match other.parse::<usize>() {
+                Ok(n) => XlcCmd::GotoLine(n),
+                Err(_) => XlcCmd::None,
+            }
+        }
+        // `:s/...` or `:%s/...`
+        other if other.starts_with("%s") || (other.starts_with('s') && other.len() > 1) => {
+            XlcCmd::Substitute(other.to_string())
+        }
         _ => XlcCmd::None,
     }
 }
 
+/// Undo / redo stack.
+///
+/// `past` holds states we can undo *to* (snapshots taken before a change).
+/// On undo, the live buffer is pushed to `future` so redo can restore it.
 #[derive(Clone)]
 pub struct UndoStack {
-    snapshots: Vec<BufferSnapshot>,
-    index: usize,
+    past: Vec<BufferSnapshot>,
+    future: Vec<BufferSnapshot>,
 }
 
 impl Default for UndoStack {
     fn default() -> Self {
         Self {
-            snapshots: Vec::new(),
-            index: 0,
+            past: Vec::new(),
+            future: Vec::new(),
         }
     }
 }
@@ -185,21 +287,31 @@ impl UndoStack {
         Self::default()
     }
 
+    /// Record state *before* a mutating edit. Clears redo history.
     pub fn push(&mut self, snapshot: BufferSnapshot) {
-        self.snapshots.truncate(self.index);
-        self.snapshots.push(snapshot);
-        self.index += 1;
+        self.past.push(snapshot);
+        self.future.clear();
     }
 
-    pub fn undo(&mut self) -> Option<&BufferSnapshot> {
-        if self.index > 1 {
-            self.index -= 1;
-            Some(&self.snapshots[self.index - 1])
-        } else if self.index == 1 {
-            self.index -= 1;
-            Some(&self.snapshots[self.index])
-        } else {
-            None
-        }
+    /// Undo: save `current` for redo, restore previous past snapshot.
+    pub fn undo(&mut self, current: BufferSnapshot) -> Option<BufferSnapshot> {
+        let prev = self.past.pop()?;
+        self.future.push(current);
+        Some(prev)
+    }
+
+    /// Redo: save `current` onto past, restore from future.
+    pub fn redo(&mut self, current: BufferSnapshot) -> Option<BufferSnapshot> {
+        let next = self.future.pop()?;
+        self.past.push(current);
+        Some(next)
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.past.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.future.is_empty()
     }
 }

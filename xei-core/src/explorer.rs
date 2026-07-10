@@ -115,8 +115,16 @@ impl Explorer {
         if self.selected + 1 < self.entries.len() {
             self.selected += 1;
         }
-        let visible = 20usize;
-        if self.selected >= self.scroll + visible {
+        // Keep selected row in view; callers should set visible_height via ensure_visible.
+        self.ensure_visible(24);
+    }
+
+    /// Scroll so that `selected` stays within a window of `visible` rows.
+    pub fn ensure_visible(&mut self, visible: usize) {
+        let visible = visible.max(1);
+        if self.selected < self.scroll {
+            self.scroll = self.selected;
+        } else if self.selected >= self.scroll + visible {
             self.scroll = self.selected - visible + 1;
         }
     }

@@ -204,7 +204,8 @@ fn handle_input(app: &mut App, key: &str, ctrl: bool, _alt: bool, _shift: bool, 
         _ => {}
     }
 
-    // After each key, poll LSP and terminal
+    // After each key, sync the document to the LSP, then poll LSP and terminal
+    app.sync_lsp_document();
     app.lsp.poll();
     if app.terminal.open { app.terminal.poll(); }
 }

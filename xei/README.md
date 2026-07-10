@@ -180,24 +180,20 @@ Auto-detected on file open. Status bar shows `LSP: clangd (3)`.
 
 ## Configuration
 
+`~/.xei.toml` — created on first theme change; every key optional:
+
 ```toml
-# ~/.xei.toml
 theme = "ocean"
 tab_width = 4
 clipboard_sync = true
 relative_number = false
 wrap_lines = true       # false = horizontal scroll (zh/zl/zH/zL pan, ↔ badge)
 gpu_acc = true          # Ghostty/Kitty enhancements (Ctrl+, → Setting)
+key_hints = true        # which-key chord popups
+lsp_enabled = true      # per-language overrides via [lsp] or Settings
 ```
 
-`~/.xei.toml` (theme auto-saved; other keys optional):
-
-```toml
-theme = "gruvbox"
-tab_width = 4
-clipboard_sync = true
-relative_number = false
-```
+Plugin hooks live in `~/.xei/hooks.toml` (`on_save` / `on_open` / `on_quit`).
 
 ## License
 

@@ -2793,7 +2793,7 @@ mod tests {
 
     #[test]
     fn initialize_request_is_valid_json() {
-        let s = build_initialize_request(1, 42, "file:///Users/asill/xei", "xei");
+        let s = build_initialize_request(1, 42, "file:///tmp/xei-proj", "xei");
         // brace balance
         let mut bal = 0i32;
         for c in s.chars() {

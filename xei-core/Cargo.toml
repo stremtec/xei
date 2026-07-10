@@ -1,6 +1,6 @@
 [package]
 name = "xei-core"
-version = "2.5.1"
+version = "1.0.0"
 edition = "2024"
 description = "xei (晴) core library — headless editor engine shared by TUI and desktop frontends"
 license = "MIT"

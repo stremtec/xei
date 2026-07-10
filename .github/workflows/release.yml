@@ -1,0 +1,53 @@
+name: release
+
+# Tag push (v*) builds xei for every install.js/install.sh target and
+# attaches gzipped binaries to the GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            mingw: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mingw (windows-gnu cross)
+        if: matrix.mingw
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+      - name: Rust target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release -p xei-editor --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          ext=""
+          if [[ "${{ matrix.target }}" == *windows* ]]; then ext=".exe"; fi
+          cp "target/${{ matrix.target }}/release/xei${ext}" "xei-${{ matrix.target }}${ext}"
+          gzip -9 "xei-${{ matrix.target }}${ext}"
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes "xei ${GITHUB_REF_NAME}" 2>/dev/null || true
+          gh release upload "${GITHUB_REF_NAME}" xei-*.gz --clobber

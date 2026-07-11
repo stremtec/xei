@@ -170,6 +170,8 @@ pub enum XlcCmd {
     CodeLens,
     PrReview(u64),
     HooksReload,
+    /// `:update` — self-update to the latest release
+    Update,
 }
 
 fn parse_command(input: &str) -> XlcCmd {
@@ -247,6 +249,7 @@ fn parse_command(input: &str) -> XlcCmd {
             XlcCmd::PrReview(n)
         }
         "hooks" | "hooks-reload" => XlcCmd::HooksReload,
+        "update" | "upgrade" => XlcCmd::Update,
         "lsp" | "LspStart" if !arg.is_empty() => XlcCmd::LspStart(arg.to_string()),
         "Rename" | "rename" if !arg.is_empty() => XlcCmd::LspRename(arg.to_string()),
         other if !other.is_empty() && other.chars().all(|c| c.is_ascii_digit()) => {

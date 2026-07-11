@@ -89,6 +89,10 @@ fn main() -> io::Result<()> {
     {
         let cfg = xei_core::config::load();
         app.apply_pet_from_config(&cfg);
+        // Async latest-release lookup (throttled; silent on failure).
+        if cfg.update_check {
+            app.update.start_check(env!("CARGO_PKG_VERSION"));
+        }
     }
 
     xei_core::set_cursor_esc(app.theme.cursor);
@@ -377,6 +381,9 @@ fn run_app(
         if app.pr_review.poll() {
             // Surface fetch results (count / error) in the status line too.
             app.message = app.pr_review.message.clone();
+        }
+        if let Some(m) = app.update.poll() {
+            app.message = m;
         }
         app.poll_hook_messages();
         app.dap.poll();

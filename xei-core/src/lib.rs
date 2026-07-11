@@ -35,6 +35,7 @@ pub mod split;
 pub mod substitute;
 pub mod syntax;
 pub mod term;
+pub mod update;
 pub mod theme;
 pub mod which_key;
 pub mod workspace_search;
@@ -77,6 +78,7 @@ pub use dap::{
     VarNode,
 };
 pub use hooks::{HookEvent, HooksConfig};
+pub use update::UpdateState;
 pub use pr_review::{PrReviewFocus, PrReviewState};
 pub use rebase::{RebaseAction, RebaseState};
 pub use lsp::CodeLens;

@@ -5001,15 +5001,31 @@ fn diag_underline_style(
 fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
     let accent = app.theme.mode_normal;
     let dim = app.theme.line_no;
-    let rows: [(&str, Color, bool); 7] = [
-        ("░ ▒ ▓ █  晴  █ ▓ ▒ ░", accent, true),
-        ("", dim, false),
-        ("x  e  i", app.theme.fg, true),
-        (concat!("v", env!("CARGO_PKG_VERSION")), dim, false),
-        ("", dim, false),
-        ("i insert · Ctrl+P files · :help commands", dim, false),
-        ("Ctrl+G source control · Ctrl+T terminal", dim, false),
+    let mut rows: Vec<(String, Color, bool)> = vec![
+        ("░ ▒ ▓ █  晴  █ ▓ ▒ ░".into(), accent, true),
+        ("".into(), dim, false),
+        ("x  e  i".into(), app.theme.fg, true),
+        (concat!("v", env!("CARGO_PKG_VERSION")).into(), dim, false),
+        ("".into(), dim, false),
+        ("i insert · Ctrl+P files · :help commands".into(), dim, false),
+        ("Ctrl+G source control · Ctrl+T terminal".into(), dim, false),
     ];
+    // Newer release found by the async check → offer the in-place update.
+    if app.update.installed {
+        rows.push(("".into(), dim, false));
+        rows.push((
+            "✓ updated — restart xei to finish".into(),
+            app.theme.success,
+            true,
+        ));
+    } else if let Some(ref v) = app.update.latest {
+        rows.push(("".into(), dim, false));
+        rows.push((
+            format!("⬆ v{v} available — :update to install · update_check=false to hide"),
+            app.theme.warning,
+            true,
+        ));
+    }
     let y0 = area.y + (area.height / 2).saturating_sub(rows.len() as u16 / 2 + 1);
     for (i, (text, color, bold)) in rows.iter().enumerate() {
         let y = y0 + i as u16;
@@ -5021,7 +5037,7 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             style = style.add_modifier(Modifier::BOLD);
         }
         f.render_widget(
-            Paragraph::new(Line::from(Span::styled(*text, style)))
+            Paragraph::new(Line::from(Span::styled(text.clone(), style)))
                 .alignment(Alignment::Center),
             Rect::new(area.x, y, area.width, 1),
         );
@@ -6269,6 +6285,27 @@ mod tests {
         let text = frame_text(&term);
         assert!(text.contains("x  e  i"), "frame:\n{}", text);
         assert!(text.contains('░'), "expected shade-art logo");
+    }
+
+    #[test]
+    fn welcome_shows_update_notice() {
+        let mut app = App::new();
+        app.update.latest = Some("9.9.9".into());
+        let backend = TestBackend::new(100, 28);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| draw(f, &mut app)).unwrap();
+        let text = frame_text(&term);
+        assert!(
+            text.contains("v9.9.9 available") && text.contains(":update"),
+            "frame:\n{}",
+            text
+        );
+        // After a successful install the notice flips to a restart hint.
+        app.update.latest = None;
+        app.update.installed = true;
+        term.draw(|f| draw(f, &mut app)).unwrap();
+        let text = frame_text(&term);
+        assert!(text.contains("restart xei"), "frame:\n{}", text);
     }
 }
 

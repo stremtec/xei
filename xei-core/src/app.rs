@@ -227,6 +227,8 @@ pub struct App {
     pub pr_review: crate::pr_review::PrReviewState,
     /// Plugin hooks (`~/.xei/hooks.toml`).
     pub hooks: crate::hooks::HooksConfig,
+    /// Release check + self-update (welcome notice · :update).
+    pub update: crate::update::UpdateState,
     /// Hook results from background threads (drained by poll_hook_messages).
     hook_msg_tx: std::sync::mpsc::Sender<String>,
     hook_msg_rx: std::sync::mpsc::Receiver<String>,
@@ -471,6 +473,7 @@ impl Default for App {
             rebase: crate::rebase::RebaseState::new(),
             pr_review: crate::pr_review::PrReviewState::new(),
             hooks: crate::hooks::HooksConfig::load(),
+            update: crate::update::UpdateState::new(),
             hook_msg_tx,
             hook_msg_rx,
             code_lens_enabled: true,
@@ -3895,6 +3898,10 @@ impl App {
                     self.open_pr_review(n);
                     self.xlc.add_output(&self.message.clone());
                 }
+            }
+            XlcCmd::Update => {
+                self.message = self.update.start_install();
+                self.xlc.add_output(&self.message.clone());
             }
             XlcCmd::HooksReload => {
                 self.reload_hooks();

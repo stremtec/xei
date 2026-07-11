@@ -12,12 +12,12 @@ cargo install xei-editor        # Cargo
 
 **macOS / Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/stremtec/xei/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/stremtec/xei/master/xei/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
+iwr https://raw.githubusercontent.com/stremtec/xei/master/xei/install.ps1 | iex
 ```
 
 ## Features

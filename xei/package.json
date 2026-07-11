@@ -1,6 +1,6 @@
 {
   "name": "xei-editor",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "xei (晴) — a modern Vim-modal terminal editor in Rust",
   "repository": {
     "type": "git",

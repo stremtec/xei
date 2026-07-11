@@ -7,7 +7,7 @@ const { get } = require("https");
 const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
-const VERSION = "v3.0.4";
+const VERSION = "v3.0.5";
 const EXE = platform === "win32" ? ".exe" : "";
 const BIN_DIR = join(__dirname, "bin");
 const BIN_PATH = join(BIN_DIR, `xei${EXE}`);

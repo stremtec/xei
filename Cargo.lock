@@ -5101,7 +5101,7 @@ dependencies = [
 
 [[package]]
 name = "xei-core"
-version = "3.0.3"
+version = "3.0.4"
 dependencies = [
  "image",
  "portable-pty",
@@ -5122,7 +5122,7 @@ dependencies = [
 
 [[package]]
 name = "xei-editor"
-version = "3.0.3"
+version = "3.0.4"
 dependencies = [
  "crossterm",
  "ratatui",

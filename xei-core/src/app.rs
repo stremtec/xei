@@ -3934,7 +3934,14 @@ impl App {
                 }
             }
             XlcCmd::Update => {
-                self.message = self.update.start_install();
+                // No check result yet (throttled/first run)? Force one now and
+                // install automatically when it lands.
+                self.message = if self.update.latest.is_none() && !self.update.installing {
+                    self.update
+                        .check_now_and_install(env!("CARGO_PKG_VERSION"))
+                } else {
+                    self.update.start_install()
+                };
                 self.xlc.add_output(&self.message.clone());
             }
             XlcCmd::HooksReload => {

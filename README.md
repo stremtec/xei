@@ -46,6 +46,7 @@ iwr https://raw.githubusercontent.com/stremtec/xei/master/xei/install.ps1 | iex
 - **Incremental search** — live `/` and reverse `?`, `n`/`N`, `*`/`#`
 - **File change detection** — auto-reload on external modification
 - **System clipboard** — `Cmd+C`/`V`/`X`, `y`/`d`/`p` sync to OS (pbcopy / xclip / wl-copy + OSC 52)
+- **Inline preview images** — `![alt](local.png)` in the Markdown preview renders the actual picture (Kitty graphics; Ghostty/Kitty/WezTerm), sized to the terminal's real cell pixels
 - **Terminal scrollback** — wheel / PageUp scrolls history (`↑N` badge); wheel forwards to mouse-aware TUIs (claude, vim); CJK-correct rendering
 - **Command palette** — `Ctrl+P` files, `Ctrl+Shift+P` commands, `:problems`
 - **Diagnostics** — `]d`/`[d` jump, problems list; `K` LSP hover
@@ -196,6 +197,7 @@ Auto-detected on file open. Status bar shows `LSP: clangd (3)`.
 | `:DapAttach <target>` | Attach debugger |
 | `:hooks` | Reload ~/.xei/hooks.toml |
 | `:update` | Self-update to the latest release |
+| `:mbb` | New blank tab (welcome screen) |
 | `:LspStart <cmd>` | Start language server |
 | `:help` | List all commands |
 
@@ -219,6 +221,8 @@ relative_number = false
 wrap_lines = true       # false = horizontal scroll (zh/zl/zH/zL pan, ↔ badge)
 update_check = true     # startup release check (welcome notice · :update)
 undo_caching = false    # keep undo history across close/reopen (~/.xei/undo)
+gpu_graphics = true     # Kitty-graphics layer (inline images · pet · media)
+gpu_hyperlinks = true   # OSC 8 links
 gpu_acc = true          # Ghostty/Kitty enhancements (Ctrl+, → Setting)
 key_hints = true        # which-key chord popups
 lsp_enabled = true      # per-language overrides via [lsp] or Settings

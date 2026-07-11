@@ -1,6 +1,6 @@
 [package]
 name = "xei-editor"
-version = "3.0.5"
+version = "3.0.6"
 edition = "2024"
 description = "xei (晴) — a modern terminal text editor in Rust with Vim-modal editing, syntax highlighting, file explorer, built-in terminal, and theming"
 license = "MIT"
@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 libc = "0.2"
-xei-core = { path = "../xei-core", version = "3.0.5" }
+xei-core = { path = "../xei-core", version = "3.0.6" }
 crossterm = "0.28"
 ratatui = { version = "0.29", features = ["underline-color"] }
 unicode-width = "0.2"

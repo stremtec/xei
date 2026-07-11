@@ -40,6 +40,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 
     // Wheel-routing rects are re-recorded by whichever surfaces draw this frame.
     app.terminal_rect = None;
+    app.preview_gfx.clear();
     if !app.dap.panel_open {
         app.dap_panel_rect = None;
     }
@@ -1091,6 +1092,36 @@ fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
                                 } else {
                                     app.theme.fg
                                 })
+                                .bg(bg),
+                        )));
+                    }
+                    SettingRow::GpuGraphics => {
+                        let on = if app.settings.draft.gpu_graphics { "on" } else { "off" };
+                        let text = format!("  gpu_graphics       {on}");
+                        let bg = if sel_here {
+                            app.theme.completion_selected
+                        } else {
+                            app.theme.completion_bg
+                        };
+                        lines.push(Line::from(Span::styled(
+                            text,
+                            Style::default()
+                                .fg(if sel_here { Color::Black } else { app.theme.fg })
+                                .bg(bg),
+                        )));
+                    }
+                    SettingRow::GpuHyperlinks => {
+                        let on = if app.settings.draft.gpu_hyperlinks { "on" } else { "off" };
+                        let text = format!("  gpu_hyperlinks     {on}");
+                        let bg = if sel_here {
+                            app.theme.completion_selected
+                        } else {
+                            app.theme.completion_bg
+                        };
+                        lines.push(Line::from(Span::styled(
+                            text,
+                            Style::default()
+                                .fg(if sel_here { Color::Black } else { app.theme.fg })
                                 .bg(bg),
                         )));
                     }
@@ -2918,7 +2949,7 @@ fn ease_in_cubic(t: f32) -> f32 {
     t * t * t
 }
 
-fn render_preview_pane(f: &mut Frame, app: &App, area: Rect, t: f32) {
+fn render_preview_pane(f: &mut Frame, app: &mut App, area: Rect, t: f32) {
     use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
     use xei_core::preview::preview_line_to_ratatui;
 
@@ -2966,6 +2997,19 @@ fn render_preview_pane(f: &mut Frame, app: &App, area: Rect, t: f32) {
         if a >= 1.0 {
             out.push(match pretty {
                 Some(pl) => {
+                    // Image anchor: queue the real picture for the Kitty layer.
+                    if t >= 1.0 {
+                        if let Some(ref img) = pl.image {
+                            let avail = area.width.saturating_sub(7).max(8);
+                            app.preview_gfx.push((
+                                img.path.clone(),
+                                area.x + 6,
+                                area.y + r as u16,
+                                img.w_cells.min(avail),
+                                img.rows,
+                            ));
+                        }
+                    }
                     let mut spans = vec![pad_span()];
                     spans.extend(preview_line_to_ratatui(pl, app.theme).spans);
                     Line::from(spans)
@@ -2986,6 +3030,7 @@ fn render_preview_pane(f: &mut Frame, app: &App, area: Rect, t: f32) {
                             source_row_plain(app, r),
                             xei_core::preview::PreviewStyle::Dim,
                         )],
+                        image: None,
                     };
                     out.push(shade_preview_line(&old, app.theme, bg, 1.0 - a, r));
                 }
@@ -4707,9 +4752,10 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     );
 
     // Fresh start (no file, nothing typed) → shade-art welcome screen.
+    // Per-tab: a blank tab (`:mbb`) shows the welcome screen even when other
+    // tabs are open.
     let show_welcome = app.filename.is_none()
         && !app.modified
-        && app.buffers.len() == 1
         && app.buffer.line_count() == 1
         && app.buffer.line(0).is_empty();
     if show_welcome {
@@ -6241,10 +6287,10 @@ mod tests {
 
     #[test]
     fn preview_pane_settles_flat_with_content() {
-        let app = app_with_old_source();
+        let mut app = app_with_old_source();
         let backend = TestBackend::new(80, 24);
         let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| render_preview_pane(f, &app, Rect::new(0, 0, 80, 24), 1.0))
+        term.draw(|f| render_preview_pane(f, &mut app, Rect::new(0, 0, 80, 24), 1.0))
             .unwrap();
         let text = frame_text(&term);
         assert!(text.contains("Markdown Preview"), "frame:\n{}", text);
@@ -6267,10 +6313,10 @@ mod tests {
 
     #[test]
     fn preview_first_frame_is_identical_to_source_view() {
-        let app = app_with_old_source();
+        let mut app = app_with_old_source();
         let backend = TestBackend::new(80, 24);
         let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| render_preview_pane(f, &app, Rect::new(0, 0, 80, 24), 0.0))
+        term.draw(|f| render_preview_pane(f, &mut app, Rect::new(0, 0, 80, 24), 0.0))
             .unwrap();
         let text = frame_text(&term);
         // At t=0 nothing has transformed: the buffer view is still fully
@@ -6284,10 +6330,10 @@ mod tests {
 
     #[test]
     fn preview_pane_transform_sweep_mid_flight() {
-        let app = app_with_old_source();
+        let mut app = app_with_old_source();
         let backend = TestBackend::new(80, 24);
         let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| render_preview_pane(f, &app, Rect::new(0, 0, 80, 24), 0.05))
+        term.draw(|f| render_preview_pane(f, &mut app, Rect::new(0, 0, 80, 24), 0.05))
             .unwrap();
         let text = frame_text(&term);
         // Top rows are still inside the ░▒▓ band — "Title" not yet legible…

@@ -1,5 +1,13 @@
 # v3.0.6 — "GPU 가속 제대로" integration plan
 
+> **Landed in 3.0.6:** GfxRegistry (diffed placements, ghost-free cleanup,
+> caret-safe flush) · inline Markdown preview images (local files, cell-pixel
+> sized, scroll-tracked) · per-feature toggles `gpu_graphics` /
+> `gpu_hyperlinks` (+ Settings rows) · TIOCGWINSZ cell-size probe (w+h).
+> **Deferred:** OSC8 sweep into list rows (ratatui cell model fights raw OSC),
+> explorer thumbnails, placement-move optimization (a=p without re-upload),
+> in-sync-window flush (G2 full), About caps read-out.
+
 > Goal: graduate GPU-terminal support from scattered enhancements (pet, media
 > preview, peek shadow) into a coherent, gated, everywhere-it-helps layer.
 >

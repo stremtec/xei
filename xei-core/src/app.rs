@@ -156,6 +156,9 @@ pub struct App {
     pub wrap_lines: bool,
     /// Persist undo history to ~/.xei/undo on close (config `undo_caching`).
     pub undo_caching: bool,
+    /// Per-feature GPU toggles under `gpu_acc`.
+    pub gpu_graphics: bool,
+    pub gpu_hyperlinks: bool,
     /// Horizontal pan (visual columns) when wrap_lines is off.
     pub hscroll: usize,
     /// Last buffer version handed to the syntax highlighter (render cache).
@@ -208,6 +211,8 @@ pub struct App {
     pub dap_panel_rect: Option<(u16, u16, u16, u16)>,
     /// Terminal rect (side panel / full window / pane-bound) for wheel routing
     pub terminal_rect: Option<(u16, u16, u16, u16)>,
+    /// Inline preview images wanted this frame: (path, x, y, w_cells, rows).
+    pub preview_gfx: Vec<(String, u16, u16, u16, u16)>,
     /// PR review tab chips: (x, y, w, h, tab 0=Files 1=Comments 2=Body)
     pub pr_tab_hits: Vec<(u16, u16, u16, u16, u8)>,
     /// PR review list rows: (x, y, w, h, row index)
@@ -262,6 +267,7 @@ pub struct App {
     pub term_hyperlinks: bool,
     /// Physical pixels per cell (from the frontend probe; 0 = unknown → 14).
     pub cell_px: u32,
+    pub cell_px_h: u32,
     pub term_modern: bool,
     /// Terminal speaks Kitty graphics protocol (Ghostty/Kitty/WezTerm).
     pub term_kitty_graphics: bool,
@@ -457,6 +463,8 @@ impl Default for App {
             relative_number: false,
             wrap_lines: true,
             undo_caching: false,
+            gpu_graphics: true,
+            gpu_hyperlinks: true,
             hscroll: 0,
             syntax_seen_version: 0,
             lsp_synced_version: 0,
@@ -483,6 +491,7 @@ impl Default for App {
             dap_row_hits: Vec::new(),
             dap_panel_rect: None,
             terminal_rect: None,
+            preview_gfx: Vec::new(),
             pr_tab_hits: Vec::new(),
             pr_row_hits: Vec::new(),
             git_pane_hits: Vec::new(),
@@ -507,6 +516,7 @@ impl Default for App {
             term_undercurl: false,
             term_underline_color: false,
             cell_px: 0,
+            cell_px_h: 0,
             term_hyperlinks: false,
             term_modern: false,
             term_kitty_graphics: false,
@@ -540,6 +550,8 @@ impl App {
             self.hscroll = 0;
         }
         self.undo_caching = cfg.undo_caching;
+        self.gpu_graphics = cfg.gpu_graphics;
+        self.gpu_hyperlinks = cfg.gpu_hyperlinks;
         self.gpu_acc = cfg.gpu_acc;
         self.key_hints = cfg.key_hints;
         self.lsp
@@ -853,6 +865,28 @@ impl App {
             self.mode = Mode::Normal;
         }
         self.message = "Debug panel closed".into();
+    }
+
+    /// `:mbb` — fresh blank tab landing on the welcome screen.
+    pub fn open_blank_tab(&mut self) {
+        self.save_state_to_tab();
+        let buffer = Buffer::new();
+        let mut undo = UndoStack::new();
+        undo.push(buffer.snapshot());
+        self.buffers.push(crate::BufferTab {
+            buffer,
+            filename: None,
+            scroll: 0,
+            modified: false,
+            undo_stack: undo,
+            file_mtime: None,
+        });
+        self.current_buffer = self.buffers.len() - 1;
+        self.restore_state_from_tab();
+        self.split.clamp_tabs(self.buffers.len());
+        self.refresh_git();
+        self.mode = Mode::Normal;
+        self.message = "New tab · i insert · Ctrl+P files · :e <file>".into();
     }
 
     /// F9 — toggle breakpoint on cursor line.
@@ -1611,6 +1645,8 @@ impl App {
             self.hscroll = 0;
         }
         self.undo_caching = cfg.undo_caching;
+        self.gpu_graphics = cfg.gpu_graphics;
+        self.gpu_hyperlinks = cfg.gpu_hyperlinks;
         self.gpu_acc = cfg.gpu_acc;
         self.key_hints = cfg.key_hints;
         self.lsp
@@ -1884,6 +1920,12 @@ impl App {
             if self.preview.closing {
                 let text = self.buffer.text();
                 let ext = self.file_extension();
+                self.preview.base_dir = self
+                    .filename
+                    .as_ref()
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+                self.preview.cell_dims =
+                    (self.cell_px_or_default(), self.cell_px_h_or_default());
                 self.preview.open_for(&text, ext.as_deref());
                 return;
             }
@@ -1927,6 +1969,14 @@ impl App {
         if self.cell_px >= 4 { self.cell_px } else { 14 }
     }
 
+    pub fn cell_px_h_or_default(&self) -> u32 {
+        if self.cell_px_h >= 6 {
+            self.cell_px_h
+        } else {
+            self.cell_px_or_default() * 2
+        }
+    }
+
     pub fn open_media_preview(&mut self, path: &std::path::Path) -> Result<(), String> {
         self.clear_media_handles();
         self.preview.open_path(path)?;
@@ -1944,6 +1994,7 @@ impl App {
                     Err(e) => {
                         self.preview.lines.push(crate::preview::PreviewLine {
                             spans: vec![(format!("  load error: {e}"), crate::preview::PreviewStyle::AlertWarning)],
+                            image: None,
                         });
                         self.message = e;
                     }
@@ -3994,6 +4045,9 @@ impl App {
                     self.update.start_install()
                 };
                 self.xlc.add_output(&self.message.clone());
+            }
+            XlcCmd::BlankTab => {
+                self.open_blank_tab();
             }
             XlcCmd::HooksReload => {
                 self.reload_hooks();

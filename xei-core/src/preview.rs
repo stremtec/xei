@@ -4,6 +4,7 @@
 //! output: GFM tables/tasks/alerts, nested lists & quotes, footnotes,
 //! autolinks, images, setext headings, fenced/indented code, entities, escapes.
 
+use std::path::Path;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
@@ -65,6 +66,10 @@ pub struct PreviewState {
     pub anim_pending: bool,
     /// Horizontal pan for long pretty lines (wrap_lines = false).
     pub hscroll: usize,
+    /// Directory of the previewed file (relative image resolution).
+    pub base_dir: Option<std::path::PathBuf>,
+    /// (cell_w_px, cell_h_px) for image row budgeting.
+    pub cell_dims: (u32, u32),
     /// Openness endpoints for the current phase (0 = source, 1 = fully pretty).
     pub anim_from: f32,
     pub anim_to: f32,
@@ -79,9 +84,22 @@ pub struct PreviewState {
 /// Transform-reveal animation length (ms) — open and reverse-close.
 pub const PREVIEW_ANIM_MS: u64 = 420;
 
+/// Inline image anchored to a preview line (drawn by the Kitty layer).
+#[derive(Debug, Clone)]
+pub struct ImageBlock {
+    /// Resolved local file path.
+    pub path: String,
+    /// Rows reserved below the anchor for the picture.
+    pub rows: u16,
+    /// Cell-width budget the row count was computed for.
+    pub w_cells: u16,
+}
+
 #[derive(Debug, Clone)]
 pub struct PreviewLine {
     pub spans: Vec<(String, PreviewStyle)>,
+    /// Set on an image anchor row (`![alt](local-file)` on its own line).
+    pub image: Option<ImageBlock>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,6 +151,8 @@ impl Default for PreviewState {
             opened_at: None,
             anim_pending: false,
             hscroll: 0,
+            base_dir: None,
+            cell_dims: (14, 28),
             anim_from: 0.0,
             anim_to: 1.0,
             closing: false,
@@ -287,24 +307,29 @@ impl PreviewState {
                 self.lines = vec![
                     PreviewLine {
                         spans: vec![("  Image preview".into(), PreviewStyle::H2)],
+                        image: None,
                     },
                     PreviewLine {
                         spans: vec![(format!("  {name}"), PreviewStyle::Dim)],
+                        image: None,
                     },
                     PreviewLine {
                         spans: vec![("".into(), PreviewStyle::Normal)],
+                        image: None,
                     },
                     PreviewLine {
                         spans: vec![(
                             "  ←/→ or h/l  resize   ·   Esc close".into(),
                             PreviewStyle::Dim,
                         )],
+                        image: None,
                     },
                     PreviewLine {
                         spans: vec![(
                             "  (Kitty/Ghostty + gpu_acc for full-res image)".into(),
                             PreviewStyle::Dim,
                         )],
+                        image: None,
                     },
                 ];
                 self.source_len = 0;
@@ -350,7 +375,9 @@ impl PreviewState {
         self.kind = Some(kind);
         self.source_len = text.len();
         self.lines = match kind {
-            PreviewKind::Markdown => render_markdown(text),
+            PreviewKind::Markdown => {
+                render_markdown(text, self.base_dir.as_deref(), self.cell_dims)
+            }
             PreviewKind::Json => render_json(text),
             PreviewKind::Plain => render_plain(text),
             PreviewKind::Csv => {
@@ -381,7 +408,43 @@ impl PreviewState {
 
 // ── Markdown (GFM-oriented) ─────────────────────────────
 
-fn render_markdown(text: &str) -> Vec<PreviewLine> {
+
+/// Resolve a markdown image to a drawable local file + row budget.
+fn image_block_for(url: &str, base: Option<&Path>, cell: (u32, u32)) -> Option<ImageBlock> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return None; // no network fetches — caption text only
+    }
+    let p = Path::new(url);
+    let path = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        base?.join(p)
+    };
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    if !crate::media::is_image_ext(&ext) {
+        return None;
+    }
+    let (iw, ih) = image::image_dimensions(&path).ok()?;
+    if iw == 0 || ih == 0 {
+        return None;
+    }
+    let (cw, ch) = (cell.0.max(4), cell.1.max(6));
+    let w_cells: u16 = 56;
+    let disp_w_px = w_cells as u32 * cw;
+    let disp_h_px = (disp_w_px as u64 * ih as u64 / iw as u64) as u32;
+    let rows = (disp_h_px.div_ceil(ch)).clamp(3, 18) as u16;
+    Some(ImageBlock {
+        path: path.display().to_string(),
+        rows,
+        w_cells,
+    })
+}
+
+fn render_markdown(
+    text: &str,
+    base: Option<&Path>,
+    cell: (u32, u32),
+) -> Vec<PreviewLine> {
     let mut out = Vec::new();
     let lines: Vec<&str> = text.lines().collect();
     let mut li = 0;
@@ -564,6 +627,34 @@ fn render_markdown(text: &str) -> Vec<PreviewLine> {
             out.push(pl(vec![("".into(), PreviewStyle::Normal)]));
             li += 1;
             continue;
+        }
+
+        // Standalone image line → real picture (Kitty layer) + caption.
+        {
+            let t = line.trim();
+            let chars: Vec<char> = t.chars().collect();
+            if chars.first() == Some(&'!') && chars.get(1) == Some(&'[') {
+                if let Some((alt, url, next)) = parse_md_image(&chars, 0) {
+                    if next >= chars.len() {
+                        if let Some(block) = image_block_for(&url, base, cell) {
+                            let cap = if alt.is_empty() {
+                                format!("🖼 {url}")
+                            } else {
+                                format!("🖼 {alt}")
+                            };
+                            let mut anchor = pl(vec![(format!("  {cap}"), PreviewStyle::Image)]);
+                            let rows = block.rows;
+                            anchor.image = Some(block);
+                            out.push(anchor);
+                            for _ in 0..rows {
+                                out.push(pl(vec![("".into(), PreviewStyle::Normal)]));
+                            }
+                            li += 1;
+                            continue;
+                        }
+                    }
+                }
+            }
         }
 
         // Paragraph: soft-join consecutive non-blank non-special lines (GFM-ish)
@@ -2118,7 +2209,7 @@ fn render_plain(text: &str) -> Vec<PreviewLine> {
 }
 
 fn pl(spans: Vec<(String, PreviewStyle)>) -> PreviewLine {
-    PreviewLine { spans }
+    PreviewLine { spans, image: None }
 }
 
 // ── Style → ratatui ─────────────────────────────────────
@@ -2225,6 +2316,10 @@ pub fn preview_line_to_ratatui(line: &PreviewLine, theme: &crate::theme::Theme) 
 mod tests {
     use super::*;
 
+    fn render_markdown_t(text: &str) -> Vec<PreviewLine> {
+        render_markdown(text, None, (14, 28))
+    }
+
     fn has_style(lines: &[PreviewLine], text: &str, style: PreviewStyle) -> bool {
         lines.iter().any(|l| {
             l.spans
@@ -2235,7 +2330,7 @@ mod tests {
 
     #[test]
     fn md_heading_and_bold() {
-        let lines = render_markdown("# Title\n\nHello **world** and `code`\n");
+        let lines = render_markdown_t("# Title\n\nHello **world** and `code`\n");
         assert!(has_style(&lines, "Title", PreviewStyle::H1));
         assert!(has_style(&lines, "world", PreviewStyle::Bold));
         assert!(has_style(&lines, "code", PreviewStyle::Code));
@@ -2243,7 +2338,7 @@ mod tests {
 
     #[test]
     fn md_list() {
-        let lines = render_markdown("- one\n- two\n");
+        let lines = render_markdown_t("- one\n- two\n");
         assert!(lines.len() >= 2);
         assert!(lines[0]
             .spans
@@ -2306,7 +2401,7 @@ mod tests {
     #[test]
     fn md_table_renders() {
         let md = "| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |\n";
-        let lines = render_markdown(md);
+        let lines = render_markdown_t(md);
         assert!(lines.len() >= 5, "got {} lines", lines.len());
         assert!(has_style(&lines, "Name", PreviewStyle::Bold));
         assert!(lines.iter().any(|l| {
@@ -2319,7 +2414,7 @@ mod tests {
     #[test]
     fn md_task_list_and_nested() {
         let md = "- [x] done\n- [ ] todo\n  - nested\n";
-        let lines = render_markdown(md);
+        let lines = render_markdown_t(md);
         assert!(has_style(&lines, "done", PreviewStyle::Strike) || has_style(&lines, "☑", PreviewStyle::TaskDone));
         assert!(lines.iter().any(|l| {
             l.spans
@@ -2334,7 +2429,7 @@ mod tests {
     #[test]
     fn md_alert_and_blockquote() {
         let md = "> [!WARNING]\n> be careful\n\n> plain quote\n";
-        let lines = render_markdown(md);
+        let lines = render_markdown_t(md);
         assert!(has_style(&lines, "WARNING", PreviewStyle::AlertWarning));
         assert!(lines.iter().any(|l| {
             l.spans
@@ -2356,7 +2451,7 @@ mod tests {
     #[test]
     fn md_footnote() {
         let md = "Hello[^1]\n\n[^1]: World note\n";
-        let lines = render_markdown(md);
+        let lines = render_markdown_t(md);
         assert!(has_style(&lines, "[^1]", PreviewStyle::Footnote));
         assert!(lines.iter().any(|l| l.spans.iter().any(|(t, _)| t.contains("World"))));
     }
@@ -2364,7 +2459,7 @@ mod tests {
     #[test]
     fn md_setext_and_h6_and_fence_tilde() {
         let md = "Main\n====\n\nSub\n----\n\n###### tiny\n\n~~~rs\nfn x(){}\n~~~\n";
-        let lines = render_markdown(md);
+        let lines = render_markdown_t(md);
         assert!(has_style(&lines, "Main", PreviewStyle::H1));
         assert!(has_style(&lines, "Sub", PreviewStyle::H2));
         assert!(has_style(&lines, "tiny", PreviewStyle::H6));
@@ -2417,7 +2512,7 @@ mod tests {
     #[test]
     fn md_front_matter_skipped() {
         let md = "---\ntitle: x\n---\n# Hi\n";
-        let lines = render_markdown(md);
+        let lines = render_markdown_t(md);
         assert!(has_style(&lines, "Hi", PreviewStyle::H1));
         assert!(!lines.iter().any(|l| l.spans.iter().any(|(t, _)| t.contains("title:"))));
     }

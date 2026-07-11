@@ -25,6 +25,8 @@ pub struct TerminalCaps {
     pub kitty_graphics: bool,
     /// Cell size in physical pixels (TIOCGWINSZ xpixel/cols; 0 = unknown).
     pub cell_px: u32,
+    /// Cell height in physical pixels (ypixel/rows; 0 = unknown).
+    pub cell_px_h: u32,
     /// Likely a GPU / modern terminal.
     pub modern: bool,
     /// Human-readable identity, e.g. "ghostty", "kitty".
@@ -40,6 +42,7 @@ impl Default for TerminalCaps {
             hyperlinks: false,
             kitty_graphics: false,
             cell_px: 0,
+            cell_px_h: 0,
             modern: false,
             name: "unknown",
         }
@@ -107,7 +110,9 @@ impl TerminalCaps {
             caps.underline_color = true;
         }
 
-        caps.cell_px = probe_cell_px();
+        let (cw, ch) = probe_cell_px();
+        caps.cell_px = cw;
+        caps.cell_px_h = ch;
 
         caps
     }
@@ -221,7 +226,7 @@ pub fn drain_input_noise() {
 /// ws_xpixel). Retina hosts report ~28-34px; images rendered at 14px/cell and
 /// upscaled by the terminal were the "blurry image" bug.
 #[cfg(unix)]
-fn probe_cell_px() -> u32 {
+fn probe_cell_px() -> (u32, u32) {
     #[repr(C)]
     #[derive(Default)]
     struct WinSize {
@@ -234,16 +239,21 @@ fn probe_cell_px() -> u32 {
     let ok = unsafe { libc::ioctl(0, libc::TIOCGWINSZ, &mut ws as *mut WinSize) } == 0;
     if ok && ws.col > 0 && ws.xpixel > 0 {
         let px = ws.xpixel as u32 / ws.col as u32;
+        let ph = if ws.row > 0 && ws.ypixel > 0 {
+            ws.ypixel as u32 / ws.row as u32
+        } else {
+            px * 2
+        };
         if (4..=72).contains(&px) {
-            return px;
+            return (px, ph.clamp(6, 144));
         }
     }
-    0
+    (0, 0)
 }
 
 #[cfg(not(unix))]
-fn probe_cell_px() -> u32 {
-    0
+fn probe_cell_px() -> (u32, u32) {
+    (0, 0)
 }
 
 #[cfg(test)]

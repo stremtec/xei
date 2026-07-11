@@ -14,6 +14,7 @@ use ratatui::{
 use xei_core::App;
 
 mod event;
+mod gfx;
 mod gpu_frame;
 mod kitty_gfx;
 mod term_caps;
@@ -77,6 +78,7 @@ fn main() -> io::Result<()> {
     // Progressive GPU-terminal caps (gated later by app.gpu_acc).
     let caps = term_caps::TerminalCaps::detect();
     app.cell_px = caps.cell_px;
+    app.cell_px_h = caps.cell_px_h;
     app.set_term_caps(
         caps.summary(),
         caps.sync_output,
@@ -176,10 +178,10 @@ fn paint_pet(
     let ok = app.pet.enabled
         && app.pet.has_frames()
         && app.pet_graphics_ok()
-        && kitty_gfx::available(app.gpu_acc, caps);
+        && kitty_gfx::available(app.gpu_acc && app.gpu_graphics, caps);
 
     if !ok {
-        if *pet_placed && kitty_gfx::available(app.gpu_acc, caps) {
+        if *pet_placed && kitty_gfx::available(app.gpu_acc && app.gpu_graphics, caps) {
             let mut out = io::stdout();
             let _ = kitty_gfx::delete_image_flush(&mut out, app.pet.image_id);
         }
@@ -249,10 +251,10 @@ fn paint_media_preview(
         && !app.preview.closing
         && matches!(app.preview.kind, Some(xei_core::PreviewKind::Image))
         && app.preview_image.is_some()
-        && kitty_gfx::available(app.gpu_acc, caps);
+        && kitty_gfx::available(app.gpu_acc && app.gpu_graphics, caps);
 
     if !show {
-        if last_sig.is_some() && kitty_gfx::available(app.gpu_acc, caps) {
+        if last_sig.is_some() && kitty_gfx::available(app.gpu_acc && app.gpu_graphics, caps) {
             if let Some((id, _, _, _)) = *last_sig {
                 let mut out = io::stdout();
                 let _ = kitty_gfx::delete_image_flush(&mut out, id);
@@ -310,6 +312,7 @@ fn run_app(
     let mut media_sig: Option<(u32, u16, u32, u32)> = None;
     // Dirty rendering: full rate around input (covers entrance animations) and
     // for live surfaces; otherwise a 100ms heartbeat picks up async results.
+    let mut gfx_registry = gfx::GfxRegistry::new();
     let mut full_until = std::time::Instant::now() + std::time::Duration::from_millis(700);
     let mut last_draw = std::time::Instant::now() - std::time::Duration::from_secs(1);
     while app.running {
@@ -329,7 +332,7 @@ fn run_app(
         // Ratatui's caret after the frame — only needed when Kitty graphics
         // will paint. Skipping otherwise avoids a blocking CSI-6n round-trip
         // per frame (noticeable over slow SSH links).
-        let editor_cursor = if kitty_gfx::available(app.gpu_acc, &caps) {
+        let editor_cursor = if kitty_gfx::available(app.gpu_acc && app.gpu_graphics, &caps) {
             terminal.get_cursor_position().ok().map(|p| (p.x, p.y))
         } else {
             None
@@ -339,11 +342,11 @@ fn run_app(
 
         // Phase B: Kitty decorations for peek (rare path)
         if app.peek.open {
-            if kitty_gfx::available(app.gpu_acc, &caps) {
+            if kitty_gfx::available(app.gpu_acc && app.gpu_graphics, &caps) {
                 let mut out = io::stdout();
                 let _ = kitty_gfx::place_shadow_bar(&mut out, 42, 56, 10, 3, 3);
             }
-            if gpu_frame::should_hyperlink(app.gpu_acc, &caps) {
+            if gpu_frame::should_hyperlink(app.gpu_acc && app.gpu_hyperlinks, &caps) {
                 let url = term_caps::file_url(&app.peek.path.display().to_string());
                 let label = app
                     .peek
@@ -359,7 +362,7 @@ fn run_app(
                 );
                 let _ = out.flush();
             }
-        } else if kitty_gfx::available(app.gpu_acc, &caps) {
+        } else if kitty_gfx::available(app.gpu_acc && app.gpu_graphics, &caps) {
             let mut out = io::stdout();
             let _ = kitty_gfx::delete_image(&mut out, 42);
             let _ = out.flush();
@@ -367,6 +370,9 @@ fn run_app(
 
         // Media image preview (Kitty) — same cursor-safe place path as pet
         let painted_media = paint_media_preview(app, &caps, editor_cursor, &mut media_sig);
+
+        // Inline preview images (Kitty) — diffed placements, ghost-free
+        let painted_gfx = gfx_registry.flush(app, &caps, editor_cursor);
 
         // Desktop pet — only writes stdout when a GIF frame actually advances
         let painted_pet = paint_pet(
@@ -378,7 +384,7 @@ fn run_app(
             editor_cursor,
         );
         // Re-assert caret only if something touched the terminal after ratatui.
-        if (painted_pet || painted_media) && let Some((cx, cy)) = editor_cursor {
+        if (painted_pet || painted_media || painted_gfx) && let Some((cx, cy)) = editor_cursor {
             let _ = terminal.set_cursor_position((cx, cy));
         }
         } // draw_now

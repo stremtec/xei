@@ -675,6 +675,8 @@ pub enum SettingRow {
     UndoCaching,
     ClipboardSync,
     GpuAcc,
+    GpuGraphics,
+    GpuHyperlinks,
     KeyHints,
     LspHeader,
     LspEnabled,
@@ -706,6 +708,8 @@ fn setting_rows() -> Vec<SettingRow> {
     rows.push(SettingRow::UndoCaching);
     rows.push(SettingRow::ClipboardSync);
     rows.push(SettingRow::GpuAcc);
+    rows.push(SettingRow::GpuGraphics);
+    rows.push(SettingRow::GpuHyperlinks);
     rows.push(SettingRow::KeyHints);
     rows.push(SettingRow::LspHeader);
     rows.push(SettingRow::LspEnabled);
@@ -1032,6 +1036,17 @@ impl SettingsPanel {
                             "gpu_acc = false  (plain cell TUI)".into()
                         });
                         return SettingsAction::ApplyGpuAcc;
+                    }
+                    SettingRow::GpuGraphics => {
+                        self.draft.gpu_graphics = !self.draft.gpu_graphics;
+                        self.dirty = true;
+                        self.status = Some(format!("gpu_graphics = {}", self.draft.gpu_graphics));
+                    }
+                    SettingRow::GpuHyperlinks => {
+                        self.draft.gpu_hyperlinks = !self.draft.gpu_hyperlinks;
+                        self.dirty = true;
+                        self.status =
+                            Some(format!("gpu_hyperlinks = {}", self.draft.gpu_hyperlinks));
                     }
                     SettingRow::KeyHints => {
                         self.draft.key_hints = !self.draft.key_hints;

@@ -19,6 +19,10 @@ pub struct Config {
     pub update_check: bool,
     /// Keep undo history on disk when a file closes (resume on reopen).
     pub undo_caching: bool,
+    /// Kitty-graphics layer (inline preview images, pet, media previews).
+    pub gpu_graphics: bool,
+    /// OSC 8 hyperlinks.
+    pub gpu_hyperlinks: bool,
     /// GPU-terminal progressive enhancements (Ghostty/Kitty).
     pub gpu_acc: bool,
     /// Show which-key style chord hints after prefix keys.
@@ -50,6 +54,8 @@ impl Default for Config {
             wrap_lines: true,
             update_check: true,
             undo_caching: false,
+            gpu_graphics: true,
+            gpu_hyperlinks: true,
             gpu_acc: true,
             key_hints: true,
             lsp_enabled: true,
@@ -135,6 +141,12 @@ pub fn load() -> Config {
             "undo_caching" => {
                 cfg.undo_caching = matches!(v, "true" | "1" | "yes" | "on");
             }
+            "gpu_graphics" => {
+                cfg.gpu_graphics = matches!(v, "true" | "1" | "yes" | "on");
+            }
+            "gpu_hyperlinks" => {
+                cfg.gpu_hyperlinks = matches!(v, "true" | "1" | "yes" | "on");
+            }
             "gpu_acc" | "gpu_acceleration" | "graphics" => {
                 cfg.gpu_acc = matches!(
                     v,
@@ -193,7 +205,7 @@ pub fn load() -> Config {
 
 pub fn save(cfg: &Config) {
     let mut content = format!(
-        "# xei config\ntheme = \"{}\"\ntab_width = {}\nclipboard_sync = {}\nrelative_number = {}\nwrap_lines = {}\nupdate_check = {}\nundo_caching = {}\ngpu_acc = {}\nkey_hints = {}\nlsp_enabled = {}\npet_enabled = {}\npet_path = \"{}\"\npet_x = {}\npet_y = {}\npet_width_cells = {}\npet_speed = {}\n",
+        "# xei config\ntheme = \"{}\"\ntab_width = {}\nclipboard_sync = {}\nrelative_number = {}\nwrap_lines = {}\nupdate_check = {}\nundo_caching = {}\ngpu_graphics = {}\ngpu_hyperlinks = {}\ngpu_acc = {}\nkey_hints = {}\nlsp_enabled = {}\npet_enabled = {}\npet_path = \"{}\"\npet_x = {}\npet_y = {}\npet_width_cells = {}\npet_speed = {}\n",
         cfg.theme,
         cfg.tab_width,
         cfg.clipboard_sync,
@@ -201,6 +213,8 @@ pub fn save(cfg: &Config) {
         if cfg.wrap_lines { "true" } else { "false" },
         if cfg.update_check { "true" } else { "false" },
         if cfg.undo_caching { "true" } else { "false" },
+        if cfg.gpu_graphics { "true" } else { "false" },
+        if cfg.gpu_hyperlinks { "true" } else { "false" },
         if cfg.gpu_acc { "true" } else { "false" },
         if cfg.key_hints { "true" } else { "false" },
         if cfg.lsp_enabled { "true" } else { "false" },

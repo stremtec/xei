@@ -94,7 +94,9 @@ impl HooksConfig {
 }
 
 fn dirs_fallback() -> PathBuf {
-    if let Some(h) = std::env::var_os("HOME") {
+    if let Some(h) =
+        std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+    {
         return PathBuf::from(h).join(".xei");
     }
     PathBuf::from(".xei")
@@ -228,13 +230,25 @@ pub fn run_hooks(
     last_msg
 }
 
+/// Platform shell: `sh -c` on unix, `cmd /C` on Windows (hooks are written
+/// for the platform they run on — placeholders stay POSIX-quoted).
+fn shell_command(cmd: &str) -> Command {
+    if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg(cmd);
+        c
+    } else {
+        let mut c = Command::new("sh");
+        c.arg("-c").arg(cmd);
+        c
+    }
+}
+
 /// Fire-and-forget: spawn commands without waiting, so quit stays instant.
 /// The children keep running after the editor exits.
 pub fn run_hooks_detached(cfg: &HooksConfig, event: HookEvent, file: Option<&Path>) {
     for (cmd, cwd) in expand_commands(cfg, event, file) {
-        let _ = Command::new("sh")
-            .arg("-c")
-            .arg(&cmd)
+        let _ = shell_command(&cmd)
             .current_dir(&cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -251,9 +265,7 @@ enum HookOutcome {
 }
 
 fn run_with_timeout(cmd: &str, cwd: &Path) -> HookOutcome {
-    let mut child = match Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
+    let mut child = match shell_command(cmd)
         .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

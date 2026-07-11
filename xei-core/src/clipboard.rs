@@ -38,6 +38,11 @@ pub fn copy(text: &str) -> bool {
         ok = true;
     }
 
+    // Windows
+    if !ok && cfg!(windows) && pipe_to(&["clip"], text) {
+        ok = true;
+    }
+
     // Always try OSC 52 as well (helps when running inside tmux/ssh/kitty/wezterm)
     // Some terminals need this even when pbcopy works from a different process context.
     osc52_copy(text);
@@ -58,6 +63,13 @@ pub fn paste() -> Option<String> {
     }
     if let Some(s) = run_stdout(&["xsel", "--clipboard", "--output"]) {
         return Some(s);
+    }
+    if cfg!(windows) {
+        if let Some(s) =
+            run_stdout(&["powershell", "-NoProfile", "-Command", "Get-Clipboard"])
+        {
+            return Some(s);
+        }
     }
     None
 }

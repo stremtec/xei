@@ -45,7 +45,13 @@ fn main() -> io::Result<()> {
     std::panic::set_hook(Box::new(move |info| {
         gpu_frame::force_end_sync();
         let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        // Popping an empty enhancement stack is a no-op — safe unconditionally.
+        let _ = execute!(
+            io::stdout(),
+            crossterm::event::PopKeyboardEnhancementFlags,
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        );
         prev_hook(info);
     }));
 
@@ -91,6 +97,21 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
+    // Kitty keyboard protocol (CSI-u) when the terminal offers it — without
+    // this, Ctrl+Shift chords are indistinguishable from plain Ctrl ones on
+    // terminals that don't send fixterms sequences by default. Legacy
+    // terminals keep working through the Space-leader / `:` fallbacks.
+    let kbd_enhanced =
+        crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false);
+    if kbd_enhanced {
+        let _ = execute!(
+            stdout,
+            crossterm::event::PushKeyboardEnhancementFlags(
+                crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+            )
+        );
+    }
+
     // Clear any leftover underline-style SGR from a previous crashed session.
     // Never set session-wide undercurl (CSI 4:3) — it paints waves on every cell.
     gpu_frame::reset_underline_sgr_stdout();
@@ -107,6 +128,12 @@ fn main() -> io::Result<()> {
 
     gpu_frame::force_end_sync();
     disable_raw_mode()?;
+    if kbd_enhanced {
+        let _ = execute!(
+            terminal.backend_mut(),
+            crossterm::event::PopKeyboardEnhancementFlags
+        );
+    }
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,

@@ -56,6 +56,27 @@ iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
 - **10 themes** — ocean, monokai, nord, solarized, gruvbox, everforest, sakura, newspaper, mono, mono_dark
 - **CJK support** — Korean, Japanese, Chinese characters render at full width
 
+## Terminal compatibility
+
+xei requests the **kitty keyboard protocol** when the terminal supports it
+(Ghostty, Kitty, WezTerm, foot, recent Alacritty) so `Ctrl+Shift+…` chords are
+fully disambiguated. On legacy terminals (Terminal.app, plain xterm) those
+chords collapse into plain `Ctrl+…` — use the built-in fallbacks:
+
+| Chord | Fallback |
+|---|---|
+| `Ctrl+Shift+V` preview | `SPC f p` · `:preview` |
+| `Ctrl+Shift+G` git workbench | `SPC g g` |
+| `Ctrl+Shift+P` command palette | `SPC p` |
+| `Ctrl+Shift+F` find in files | `SPC s f` |
+| `Ctrl+Shift+T` terminal window | `SPC w t` / `SPC t T` |
+| `Ctrl+Shift+D` debug panel | `SPC d d` |
+| `Ctrl+Shift+I` format | `SPC l f` |
+| `Ctrl+Shift+O` symbols | `gO` |
+
+Windows: runs in Windows Terminal / ConPTY (PowerShell is spawned for the
+built-in terminal; clipboard falls back to `clip` / `Get-Clipboard` + OSC 52).
+
 ## LSP
 
 Auto-detected on file open. Status bar shows `LSP: clangd (3)`.

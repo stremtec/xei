@@ -362,7 +362,9 @@ fn encode_base64_local(data: &[u8]) -> String {
 
 pub fn expand_path(p: &str) -> PathBuf {
     if let Some(rest) = p.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
+        if let Ok(home) =
+            std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE"))
+        {
             return PathBuf::from(home).join(rest);
         }
     }

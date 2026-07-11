@@ -2,7 +2,7 @@
 
 > A modern Vim-like terminal editor in Rust with LSP, tree-sitter, and IDE features.
 
-![](https://raw.githubusercontent.com/stremtec/xei/master/xei/xei.png)
+![](https://raw.githubusercontent.com/stremtec/xei/master/xei/hero.png)
 
 ```bash
 npm install -g xei-editor       # npm

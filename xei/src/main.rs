@@ -110,6 +110,12 @@ fn main() -> io::Result<()> {
                 crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
             )
         );
+    } else {
+        // Terminal.app / plain xterm can't encode Ctrl+Shift, Ctrl+, or
+        // Ctrl+. at all — tell the user where the fallbacks live.
+        app.message =
+            "⌨ legacy terminal: Ctrl+Shift/Ctrl+,/Ctrl+. unavailable — use SPC leader · :settings · :help"
+                .into();
     }
 
     // Clear any leftover underline-style SGR from a previous crashed session.

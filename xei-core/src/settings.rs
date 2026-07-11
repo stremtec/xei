@@ -171,6 +171,11 @@ pub fn help_entries() -> &'static [HelpEntry] {
             is_header: false,
         },
         HelpEntry {
+            keys: ":settings / SPC l a",
+            desc: "Settings · code actions (legacy terminals: Ctrl+,/Ctrl+. don't exist)",
+            is_header: false,
+        },
+        HelpEntry {
             keys: "Ctrl+Shift+D / SPC d",
             desc: "Debug panel (stack · vars · BPs · console)",
             is_header: false,

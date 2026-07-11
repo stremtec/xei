@@ -73,6 +73,13 @@ chords collapse into plain `Ctrl+…` — use the built-in fallbacks:
 | `Ctrl+Shift+D` debug panel | `SPC d d` |
 | `Ctrl+Shift+I` format | `SPC l f` |
 | `Ctrl+Shift+O` symbols | `gO` |
+| `Ctrl+,` settings | `:settings` |
+| `Ctrl+.` code actions | `SPC l a` |
+
+> ⚠ On legacy terminals a `Ctrl+Shift+key` press arrives as plain `Ctrl+key`
+> and triggers *that* binding instead (e.g. `Ctrl+Shift+V` lands on visual
+> block). `Ctrl+,` and `Ctrl+.` produce no byte at all. This is a terminal
+> limitation — the fallbacks above are the supported path.
 
 Windows: runs in Windows Terminal / ConPTY (PowerShell is spawned for the
 built-in terminal; clipboard falls back to `clip` / `Get-Clipboard` + OSC 52).

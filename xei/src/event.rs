@@ -9,28 +9,33 @@ use xei_core::macros::MacroKey;
 use xei_core::nav::FindKind;
 use xei_core::ops::{motion_from_char, parse_textobject, Motion, Operator};
 
-pub fn handle_events(app: &mut App) -> io::Result<bool> {
+/// Returns (still_running, processed_any_event) — the caller uses the event
+/// flag to keep rendering at full rate around user interaction.
+pub fn handle_events(app: &mut App) -> io::Result<(bool, bool)> {
     if !event::poll(std::time::Duration::from_millis(10))? {
-        return Ok(app.running);
+        return Ok((app.running, false));
     }
+    let mut had_event = false;
     loop {
         match event::read()? {
             Event::Key(key) => {
                 if key.kind == KeyEventKind::Press {
+                    had_event = true;
                     handle_key(app, key.code, key.modifiers);
                 }
             }
             Event::Mouse(mouse) => {
+                had_event = true;
                 handle_mouse(app, mouse.kind, mouse.column, mouse.row, mouse.modifiers);
             }
-            Event::Resize(_w, _h) => {}
+            Event::Resize(_w, _h) => had_event = true,
             _ => {}
         }
         if !event::poll(std::time::Duration::from_millis(0))? {
             break;
         }
     }
-    Ok(app.running)
+    Ok((app.running, had_event))
 }
 fn rect_contains(rect: Option<(u16, u16, u16, u16)>, column: u16, row: u16) -> bool {
     rect.map(|(x, y, w, h)| {

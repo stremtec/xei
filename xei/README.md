@@ -218,6 +218,7 @@ clipboard_sync = true
 relative_number = false
 wrap_lines = true       # false = horizontal scroll (zh/zl/zH/zL pan, ↔ badge)
 update_check = true     # startup release check (welcome notice · :update)
+undo_caching = false    # keep undo history across close/reopen (~/.xei/undo)
 gpu_acc = true          # Ghostty/Kitty enhancements (Ctrl+, → Setting)
 key_hints = true        # which-key chord popups
 lsp_enabled = true      # per-language overrides via [lsp] or Settings

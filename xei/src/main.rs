@@ -307,7 +307,22 @@ fn run_app(
     let mut pet_last_frame = usize::MAX;
     let mut pet_last_pos: (u16, u16) = (u16::MAX, u16::MAX);
     let mut media_sig: Option<(u32, u16, u32, u32)> = None;
+    // Dirty rendering: full rate around input (covers entrance animations) and
+    // for live surfaces; otherwise a 100ms heartbeat picks up async results.
+    let mut full_until = std::time::Instant::now() + std::time::Duration::from_millis(700);
+    let mut last_draw = std::time::Instant::now() - std::time::Duration::from_secs(1);
     while app.running {
+        let now = std::time::Instant::now();
+        let live_surface = app.terminal.open
+            || (app.pet.enabled && app.pet.has_frames())
+            || app.git_wb.is_loading()
+            || app.pr_review.loading
+            || app.dap.is_session();
+        let draw_now = now < full_until
+            || live_surface
+            || now.duration_since(last_draw) >= std::time::Duration::from_millis(100);
+        if draw_now {
+            last_draw = now;
         let use_sync = gpu_frame::should_sync(app.gpu_acc, &caps);
         gpu_frame::draw_synced(terminal, use_sync, |f| ui::draw(f, app))?;
         // Ratatui's caret after the frame — only needed when Kitty graphics
@@ -365,7 +380,12 @@ fn run_app(
         if (painted_pet || painted_media) && let Some((cx, cy)) = editor_cursor {
             let _ = terminal.set_cursor_position((cx, cy));
         }
-        if !event::handle_events(app)? {
+        } // draw_now
+        let (running, had_event) = event::handle_events(app)?;
+        if had_event {
+            full_until = std::time::Instant::now() + std::time::Duration::from_millis(700);
+        }
+        if !running {
             break;
         }
         // Background Git workbench loads (PRs / Issues / Auth / Branches)

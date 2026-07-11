@@ -21,12 +21,21 @@ impl Position {
 pub struct Buffer {
     lines: Vec<String>,
     pub cursor: Position,
+    /// Bumped on every text mutation — frames re-parse/re-sync only on change.
+    version: u64,
+}
+
+fn next_version() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
 impl Default for Buffer {
     fn default() -> Self {
         Self {
             lines: vec![String::new()],
+            version: next_version(),
             cursor: Position::zero(),
         }
     }
@@ -47,6 +56,7 @@ impl Buffer {
         Self {
             lines,
             cursor: Position::zero(),
+            version: next_version(),
         }
     }
 
@@ -117,6 +127,7 @@ impl Buffer {
     }
 
     pub fn set_line(&mut self, row: usize, text: String) {
+        self.touch();
         if row < self.lines.len() {
             self.lines[row] = text;
         }
@@ -155,17 +166,20 @@ impl Buffer {
 
     #[allow(dead_code)]
     pub fn append_to_line(&mut self, row: usize, text: &str) {
+        self.touch();
         if row < self.lines.len() {
             self.lines[row].push_str(text);
         }
     }
 
     pub fn insert_line_at(&mut self, row: usize, line: String) {
+        self.touch();
         self.lines.insert(row, line);
         self.cursor.row = row;
     }
 
     pub fn insert_char(&mut self, ch: char) {
+        self.touch();
         let line = &mut self.lines[self.cursor.row];
         let byte_idx = char_to_byte(self.cursor.col, line);
         line.insert(byte_idx, ch);
@@ -174,6 +188,7 @@ impl Buffer {
 
     /// Insert multi-line text at the cursor (snippets / paste-like).
     pub fn insert_str(&mut self, s: &str) {
+        self.touch();
         for ch in s.chars() {
             if ch == '\n' {
                 self.insert_newline();
@@ -184,6 +199,7 @@ impl Buffer {
     }
 
     pub fn insert_char_pair(&mut self, open: char, close: char) {
+        self.touch();
         let line = &mut self.lines[self.cursor.row];
         let byte_idx = char_to_byte(self.cursor.col, line);
         line.insert(byte_idx, open);
@@ -214,6 +230,7 @@ impl Buffer {
     }
 
     pub fn delete_pair(&mut self, open: char, close: char) -> bool {
+        self.touch();
         if self.char_before_cursor() == Some(open) && self.char_after_cursor() == Some(close) {
             let line_str = self.lines[self.cursor.row].clone();
             let open_byte = char_to_byte(self.cursor.col - 1, &line_str);
@@ -232,6 +249,7 @@ impl Buffer {
     }
 
     pub fn insert_newline(&mut self) {
+        self.touch();
         let line = &mut self.lines[self.cursor.row];
         let byte_idx = char_to_byte(self.cursor.col, line);
         let after: String = line.drain(byte_idx..).collect();
@@ -241,6 +259,7 @@ impl Buffer {
     }
 
     pub fn insert_newline_with_indent(&mut self, extra_indent: bool) {
+        self.touch();
         let current_row = self.cursor.row;
         let indent = self.leading_indent(current_row);
 
@@ -267,6 +286,7 @@ impl Buffer {
     }
 
     pub fn backspace(&mut self) {
+        self.touch();
         if self.cursor.col > 0 {
             let line = &mut self.lines[self.cursor.row];
             let byte_idx = char_to_byte(self.cursor.col - 1, line);
@@ -284,6 +304,7 @@ impl Buffer {
     }
 
     pub fn delete_char_at_cursor(&mut self) {
+        self.touch();
         let line_len = self.current_line_len();
         if self.cursor.col < line_len {
             let line = &mut self.lines[self.cursor.row];
@@ -297,6 +318,7 @@ impl Buffer {
     }
 
     pub fn delete_line(&mut self) -> String {
+        self.touch();
         if self.lines.len() == 1 {
             let line = std::mem::take(&mut self.lines[0]);
             self.cursor.col = 0;
@@ -311,6 +333,7 @@ impl Buffer {
     }
 
     pub fn delete_word(&mut self) -> String {
+        self.touch();
         let chars: Vec<char> = self.line(self.cursor.row).chars().collect();
         if self.cursor.col >= chars.len() {
             return String::new();
@@ -338,6 +361,7 @@ impl Buffer {
     }
 
     pub fn paste_line_after(&mut self, text: &str) {
+        self.touch();
         self.lines.insert(self.cursor.row + 1, text.to_string());
         self.cursor.row += 1;
         self.cursor.col = 0;
@@ -415,6 +439,16 @@ impl Buffer {
         self.cursor.col = pos;
     }
 
+    /// Monotonic text version (constructor + every mutation get fresh values).
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    /// Mark the text as changed.
+    pub fn touch(&mut self) {
+        self.version = next_version();
+    }
+
     pub fn snapshot(&self) -> BufferSnapshot {
         BufferSnapshot {
             lines: self.lines.clone(),
@@ -423,6 +457,7 @@ impl Buffer {
     }
 
     pub fn restore(&mut self, snapshot: &BufferSnapshot) {
+        self.touch();
         self.lines = snapshot.lines.clone();
         self.cursor = snapshot.cursor;
     }
@@ -476,6 +511,7 @@ impl Buffer {
     // ── Replace ────────────────────────────────────────
 
     pub fn replace_char(&mut self, ch: char) {
+        self.touch();
         let line = &self.lines[self.cursor.row];
         let len = line.chars().count();
         if self.cursor.col >= len {
@@ -493,11 +529,13 @@ impl Buffer {
     // ── Indent / Dedent ────────────────────────────────
 
     pub fn indent_line(&mut self) {
+        self.touch();
         self.lines[self.cursor.row].insert_str(0, "    ");
         self.cursor.col += 4;
     }
 
     pub fn dedent_line(&mut self) {
+        self.touch();
         let line = &self.lines[self.cursor.row];
         if line.starts_with("    ") {
             self.lines[self.cursor.row] = line[4..].to_string();
@@ -516,6 +554,7 @@ impl Buffer {
     // ── Join lines ─────────────────────────────────────
 
     pub fn join_lines(&mut self) {
+        self.touch();
         if self.cursor.row + 1 < self.lines.len() {
             let next = self.lines.remove(self.cursor.row + 1);
             let next_trim = next.trim_start();
@@ -568,6 +607,18 @@ fn char_class(c: char) -> CharClass {
 pub struct BufferSnapshot {
     lines: Vec<String>,
     cursor: Position,
+}
+
+impl BufferSnapshot {
+    pub fn lines(&self) -> &[String] {
+        &self.lines
+    }
+    pub fn cursor(&self) -> Position {
+        self.cursor
+    }
+    pub fn from_parts(lines: Vec<String>, cursor: Position) -> Self {
+        Self { lines, cursor }
+    }
 }
 
 fn char_to_byte(char_idx: usize, line: &str) -> usize {

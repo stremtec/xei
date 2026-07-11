@@ -28,7 +28,8 @@ use crate::substitute::{self, SubstituteCmd};
 use crate::syntax::SyntaxEngine;
 use crate::term::Terminal;
 use crate::theme::{self, Theme, OCEAN};
-use crate::xlc::{UndoStack, Xlc, XlcCmd};
+use crate::undo::UndoStack;
+use crate::xlc::{Xlc, XlcCmd};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -153,8 +154,14 @@ pub struct App {
     pub relative_number: bool,
     /// Soft-wrap long lines; false = horizontal scroll via `hscroll`.
     pub wrap_lines: bool,
+    /// Persist undo history to ~/.xei/undo on close (config `undo_caching`).
+    pub undo_caching: bool,
     /// Horizontal pan (visual columns) when wrap_lines is off.
     pub hscroll: usize,
+    /// Last buffer version handed to the syntax highlighter (render cache).
+    pub syntax_seen_version: u64,
+    /// Last buffer version pushed to the LSP (didChange gate).
+    lsp_synced_version: u64,
     /// Git gutter signs for the current file
     pub git: GitGutter,
     /// Optional git blame overlay (`gb` toggle)
@@ -436,7 +443,10 @@ impl Default for App {
             clipboard_sync: true,
             relative_number: false,
             wrap_lines: true,
+            undo_caching: false,
             hscroll: 0,
+            syntax_seen_version: 0,
+            lsp_synced_version: 0,
             git: GitGutter::new(),
             blame: GitBlame::default(),
             folds: FoldState::new(),
@@ -513,6 +523,7 @@ impl App {
         if self.wrap_lines {
             self.hscroll = 0;
         }
+        self.undo_caching = cfg.undo_caching;
         self.gpu_acc = cfg.gpu_acc;
         self.key_hints = cfg.key_hints;
         self.lsp
@@ -633,6 +644,8 @@ impl App {
         app.apply_config();
         {
             let text = app.buffer.text();
+            app.undo_stack
+                .attach_file(&abs_path, app.undo_caching, &text);
             app.lsp
                 .auto_start_with_text(&abs_path.display().to_string(), Some(&text));
             app.lsp_synced_path = Some(abs_path.clone());
@@ -1554,6 +1567,7 @@ impl App {
         if self.wrap_lines {
             self.hscroll = 0;
         }
+        self.undo_caching = cfg.undo_caching;
         self.gpu_acc = cfg.gpu_acc;
         self.key_hints = cfg.key_hints;
         self.lsp
@@ -2015,14 +2029,20 @@ impl App {
         if !crate::lsp::has_server_for(&path_str) {
             return;
         }
+        // Version gate: skip the O(file) join + hash entirely when the text
+        // hasn't mutated since the last sync (this runs every ~5 frames).
+        let path_changed = self.lsp_synced_path.as_ref() != Some(&path);
+        if !path_changed && self.lsp_synced_version == self.buffer.version() {
+            return;
+        }
         let text = self.buffer.text();
         let hash = text_hash(&text);
-        let path_changed = self.lsp_synced_path.as_ref() != Some(&path);
         if path_changed || self.lsp_synced_hash != hash {
             self.lsp.notify_change(&path_str, &text);
             self.lsp_synced_path = Some(path);
             self.lsp_synced_hash = hash;
         }
+        self.lsp_synced_version = self.buffer.version();
     }
 
     pub fn undo(&mut self) {
@@ -2570,6 +2590,15 @@ impl App {
     }
 
     pub fn quit(&mut self) {
+        // Persist or discard undo history for every open file (undo_caching).
+        self.save_state_to_tab();
+        let caching = self.undo_caching;
+        for tab in &mut self.buffers {
+            if tab.filename.is_some() {
+                let text = tab.buffer.text();
+                tab.undo_stack.finish(caching, &text);
+            }
+        }
         // Detached so quitting is instant; the hook keeps running after exit.
         crate::hooks::run_hooks_detached(
             &self.hooks,
@@ -3388,8 +3417,13 @@ impl App {
                 self.scroll = scroll.min(self.buffer.line_count().saturating_sub(1));
                 self.modified = false;
                 self.record_mtime();
-                self.undo_stack = crate::xlc::UndoStack::new();
+                self.undo_stack = UndoStack::new();
                 self.undo_stack.push(self.buffer.snapshot());
+                if let Some(p) = self.filename.clone() {
+                    let text = self.buffer.text();
+                    self.undo_stack
+                        .attach_file(&p, self.undo_caching, &text);
+                }
                 self.rebuild_folds();
                 self.refresh_git();
                 self.lsp_restart_for_current();
@@ -4693,7 +4727,7 @@ impl App {
         self.scroll = scroll.min(self.buffer.line_count().saturating_sub(1));
         self.modified = false;
         self.file_mtime = Some(mtime);
-        self.undo_stack = crate::xlc::UndoStack::new();
+        self.undo_stack = UndoStack::new();
         self.undo_stack.push(self.buffer.snapshot());
         self.rebuild_folds();
         self.refresh_git();
@@ -4757,6 +4791,7 @@ impl App {
         let mtime = std::fs::metadata(&abs_path).ok().and_then(|m| m.modified().ok());
         let mut undo = UndoStack::new();
         undo.push(buffer.snapshot());
+        undo.attach_file(&abs_path, self.undo_caching, &content);
 
         self.buffers.push(BufferTab {
             buffer,
@@ -4964,6 +4999,14 @@ impl App {
     }
 
     pub fn close_current_tab(&mut self) {
+        // Persist or discard the closing buffer's history (undo_caching).
+        self.save_state_to_tab();
+        if let Some(tab) = self.buffers.get_mut(self.current_buffer) {
+            if tab.filename.is_some() {
+                let text = tab.buffer.text();
+                tab.undo_stack.finish(self.undo_caching, &text);
+            }
+        }
         if self.buffers.len() <= 1 {
             self.lsp.shutdown();
             self.buffer = Buffer::new();

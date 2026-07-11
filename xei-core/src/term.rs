@@ -883,21 +883,25 @@ impl Terminal {
         row: &[Cell],
         force_black_bg: bool,
     ) -> Vec<(String, Option<ratatui::style::Color>, Option<ratatui::style::Color>)> {
-        let mut out = Vec::with_capacity(row.len());
+        // Run-group consecutive same-style cells: a typical row collapses from
+        // ~200 one-char Strings to a handful of spans (this runs every frame).
+        let mut out: Vec<(String, Option<ratatui::style::Color>, Option<ratatui::style::Color>)> =
+            Vec::new();
         let mut i = 0;
         while i < row.len() {
             let cell = &row[i];
             let w = UnicodeWidthChar::width(cell.ch).unwrap_or(1).max(1);
-            out.push((
-                cell.ch.to_string(),
-                // Always resolve so empty cells paint pure black
-                Some(cell.fg.unwrap_or(Color::Default).to_ratatui_fg()),
-                if force_black_bg {
-                    Some(Color::Default.to_ratatui())
-                } else {
-                    Some(cell.bg.unwrap_or(Color::Default).to_ratatui())
-                },
-            ));
+            // Always resolve so empty cells paint pure black
+            let fg = Some(cell.fg.unwrap_or(Color::Default).to_ratatui_fg());
+            let bg = if force_black_bg {
+                Some(Color::Default.to_ratatui())
+            } else {
+                Some(cell.bg.unwrap_or(Color::Default).to_ratatui())
+            };
+            match out.last_mut() {
+                Some((run, rfg, rbg)) if *rfg == fg && *rbg == bg => run.push(cell.ch),
+                _ => out.push((cell.ch.to_string(), fg, bg)),
+            }
             i += w;
         }
         out

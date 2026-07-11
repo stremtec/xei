@@ -35,6 +35,7 @@ pub mod split;
 pub mod substitute;
 pub mod syntax;
 pub mod term;
+pub mod undo;
 pub mod update;
 pub mod theme;
 pub mod which_key;

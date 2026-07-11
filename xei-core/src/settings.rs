@@ -672,6 +672,7 @@ pub enum SettingRow {
     TabWidth,
     RelativeNumber,
     WrapLines,
+    UndoCaching,
     ClipboardSync,
     GpuAcc,
     KeyHints,
@@ -702,6 +703,7 @@ fn setting_rows() -> Vec<SettingRow> {
     rows.push(SettingRow::TabWidth);
     rows.push(SettingRow::RelativeNumber);
     rows.push(SettingRow::WrapLines);
+    rows.push(SettingRow::UndoCaching);
     rows.push(SettingRow::ClipboardSync);
     rows.push(SettingRow::GpuAcc);
     rows.push(SettingRow::KeyHints);
@@ -994,6 +996,15 @@ impl SettingsPanel {
                             "relative_number = {}",
                             self.draft.relative_number
                         ));
+                    }
+                    SettingRow::UndoCaching => {
+                        self.draft.undo_caching = !self.draft.undo_caching;
+                        self.dirty = true;
+                        self.status = Some(if self.draft.undo_caching {
+                            "undo_caching = true  (history survives close · ~/.xei/undo)".into()
+                        } else {
+                            "undo_caching = false  (history discarded on close)".into()
+                        });
                     }
                     SettingRow::WrapLines => {
                         self.draft.wrap_lines = !self.draft.wrap_lines;

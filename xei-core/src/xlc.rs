@@ -1,4 +1,3 @@
-use crate::buffer::BufferSnapshot;
 
 pub struct Xlc {
     pub open: bool,
@@ -266,55 +265,5 @@ fn parse_command(input: &str) -> XlcCmd {
     }
 }
 
-/// Undo / redo stack.
-///
-/// `past` holds states we can undo *to* (snapshots taken before a change).
-/// On undo, the live buffer is pushed to `future` so redo can restore it.
-#[derive(Clone)]
-pub struct UndoStack {
-    past: Vec<BufferSnapshot>,
-    future: Vec<BufferSnapshot>,
-}
+// UndoStack moved to crate::undo (delta-based, SSD spill).
 
-impl Default for UndoStack {
-    fn default() -> Self {
-        Self {
-            past: Vec::new(),
-            future: Vec::new(),
-        }
-    }
-}
-
-impl UndoStack {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Record state *before* a mutating edit. Clears redo history.
-    pub fn push(&mut self, snapshot: BufferSnapshot) {
-        self.past.push(snapshot);
-        self.future.clear();
-    }
-
-    /// Undo: save `current` for redo, restore previous past snapshot.
-    pub fn undo(&mut self, current: BufferSnapshot) -> Option<BufferSnapshot> {
-        let prev = self.past.pop()?;
-        self.future.push(current);
-        Some(prev)
-    }
-
-    /// Redo: save `current` onto past, restore from future.
-    pub fn redo(&mut self, current: BufferSnapshot) -> Option<BufferSnapshot> {
-        let next = self.future.pop()?;
-        self.past.push(current);
-        Some(next)
-    }
-
-    pub fn can_undo(&self) -> bool {
-        !self.past.is_empty()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        !self.future.is_empty()
-    }
-}

@@ -1,5 +1,11 @@
 # Polish Backlog — bug audit (2026-07-10)
 
+> **v3.0.3 optimization build (07-11):** delta-based undo (804MB→4.5MB per
+> 300-edit session) + IN_RAM_MAX=50 SSD spill + `undo_caching` persistence;
+> idle CPU 54.8%→8.0% (buffer version gate kills the per-frame O(file) join,
+> dirty rendering w/ 100ms heartbeat + 700ms full-rate input window, terminal
+> span run-grouping, per-row hoists, LSP sync version gate, thin-LTO profile).
+
 > **Fix round 1 landed (same day):** A1 A2 A4 A5 A6 B1 B2 B3 C1 D1 done;
 > A3 done as N-pane single-direction splits (max 4).
 > **Round 1.5 (07-11, from live-terminal report):** terminal scrollback view

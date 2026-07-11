@@ -31,8 +31,12 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     let ext = app.file_extension();
-    let text = app.buffer.text();
-    app.syntax.parse(&text, ext.as_deref());
+    // O(file) join + parse only when the text actually changed.
+    if app.syntax_seen_version != app.buffer.version() {
+        let text = app.buffer.text();
+        app.syntax.parse(&text, ext.as_deref());
+        app.syntax_seen_version = app.buffer.version();
+    }
 
     // Wheel-routing rects are re-recorded by whichever surfaces draw this frame.
     app.terminal_rect = None;
@@ -1074,6 +1078,29 @@ fn draw_settings(f: &mut Frame, app: &mut App, area: Rect) {
                     }
                     SettingRow::TabWidth => {
                         let text = format!("  tab_width          {}", app.settings.draft.tab_width);
+                        let bg = if sel_here {
+                            app.theme.completion_selected
+                        } else {
+                            app.theme.completion_bg
+                        };
+                        lines.push(Line::from(Span::styled(
+                            text,
+                            Style::default()
+                                .fg(if sel_here {
+                                    Color::Black
+                                } else {
+                                    app.theme.fg
+                                })
+                                .bg(bg),
+                        )));
+                    }
+                    SettingRow::UndoCaching => {
+                        let on = if app.settings.draft.undo_caching {
+                            "on"
+                        } else {
+                            "off"
+                        };
+                        let text = format!("  undo_caching       {on}");
                         let bg = if sel_here {
                             app.theme.completion_selected
                         } else {
@@ -4690,6 +4717,22 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
 
     let visible_height = area.height as usize;
     let scroll = app.scroll;
+    // Hoisted out of the row loop: one lookup per frame, not per row.
+    let path_s = app
+        .filename
+        .as_ref()
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let bp_lines: Vec<usize> = if path_s.is_empty() {
+        Vec::new()
+    } else {
+        app.dap.lines_for(&path_s)
+    };
+    let dbg_line = if path_s.is_empty() {
+        None
+    } else {
+        app.dap.current_line_for(&path_s)
+    };
     let all_lines = app.buffer.lines();
     let selection = app.selected_range();
     let ext = app.file_extension();
@@ -4739,14 +4782,8 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             break;
         }
         let is_cursor_line = idx == cursor_row;
-        let path_s = app
-            .filename
-            .as_ref()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-        let has_bp = !path_s.is_empty() && app.dap.has_breakpoint(&path_s, idx);
-        let is_debug_line = !path_s.is_empty()
-            && app.dap.current_line_for(&path_s) == Some(idx);
+        let has_bp = bp_lines.contains(&idx);
+        let is_debug_line = dbg_line == Some(idx);
         let git_sign = app.git.sign_at(idx);
         // BP + stopped → ◉; else ● / ▶; else git/fold marks
         let git_ch = if has_bp && is_debug_line {

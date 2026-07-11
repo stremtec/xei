@@ -390,7 +390,14 @@ fn run_app(
             break;
         }
         // Background Git workbench loads (PRs / Issues / Auth / Branches)
-        let _ = app.git_wb.poll_loading();
+        if app.git_wb.poll_loading() {
+            if let Some(m) = app.git_wb.take_app_message() {
+                app.message = m;
+                app.refresh_git();
+            }
+        }
+        // Async gutter/blame results
+        let _ = app.poll_git_refresh();
         // Post-edit didChange sync, throttled to ~every 5 frames (≈50ms) so
         // fast typing coalesces into one full-text notification.
         lsp_sync_tick = lsp_sync_tick.wrapping_add(1);

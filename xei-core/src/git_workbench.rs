@@ -110,6 +110,15 @@ pub enum DiffOrigin {
     Commit { hash: String, path: String },
 }
 
+/// Background-able network git operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteAction {
+    Fetch,
+    Pull,
+    PullRebase,
+    Push,
+}
+
 #[derive(Debug)]
 pub struct GitWorkbench {
     pub open: bool,
@@ -185,6 +194,11 @@ pub struct GitWorkbench {
     pub loading: Option<GitLoadTarget>,
     loading_started: Option<Instant>,
     load_rx: Option<Receiver<GitLoadResult>>,
+    /// Remote git op (push/pull/fetch) running on a background thread.
+    action_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
+    pub action_label: Option<&'static str>,
+    /// Finished action message for the app frontend to surface.
+    app_msg: Option<String>,
     /// Right-click commit menu.
     pub ctx_menu: Option<GitContextMenu>,
 }
@@ -275,6 +289,9 @@ impl Default for GitWorkbench {
             loading: None,
             loading_started: None,
             load_rx: None,
+            action_rx: None,
+            action_label: None,
+            app_msg: None,
             ctx_menu: None,
         }
     }
@@ -390,7 +407,7 @@ impl GitWorkbench {
     }
 
     pub fn is_loading(&self) -> bool {
-        self.loading.is_some()
+        self.loading.is_some() || self.action_rx.is_some()
     }
 
     /// Animation tick (120ms steps) for shade-block phase.
@@ -540,6 +557,27 @@ impl GitWorkbench {
     /// Returns true if state changed (needs redraw attention).
     pub fn poll_loading(&mut self) -> bool {
         let mut changed = self.poll_auth_login();
+        // Remote action completion (push/pull/fetch)
+        if let Some(rx) = self.action_rx.take() {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.action_label = None;
+                    let msg = match result {
+                        Ok(m) => m.lines().next().unwrap_or("ok").to_string(),
+                        Err(e) => e.lines().next().unwrap_or("git action failed").to_string(),
+                    };
+                    self.message = Some(msg.clone());
+                    self.app_msg = Some(msg);
+                    let root = self.root.clone();
+                    self.refresh(root.as_deref());
+                    changed = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => self.action_rx = Some(rx),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.action_label = None;
+                }
+            }
+        }
         let Some(rx) = self.load_rx.take() else {
             return changed;
         };
@@ -1675,14 +1713,6 @@ impl GitWorkbench {
         Ok(())
     }
 
-    pub fn pull_rebase(&mut self) -> Result<(), String> {
-        let root = self.root.clone().ok_or_else(|| "No git root".to_string())?;
-        let msg = git_ops::pull_rebase(&root)?;
-        self.message = Some(msg);
-        self.refresh_status(Some(&root));
-        Ok(())
-    }
-
     pub fn load_stashes_and_remotes(&mut self) {
         if let Some(ref root) = self.root {
             self.stashes = git_ops::stash_list(root).unwrap_or_default();
@@ -1690,28 +1720,34 @@ impl GitWorkbench {
         }
     }
 
-    pub fn fetch(&mut self) -> Result<(), String> {
-        let root = self.root.clone().ok_or_else(|| "No git root".to_string())?;
-        let msg = git_ops::fetch(&root)?;
-        self.message = Some(msg);
-        self.refresh(Some(&root));
-        Ok(())
+    /// Network git ops run on a background thread — the toolbar spinner plays
+    /// while they fly and the result lands via `poll_loading`.
+    pub fn remote_action(&mut self, action: RemoteAction) -> String {
+        if self.action_rx.is_some() {
+            return "⟳ a git action is already running…".into();
+        }
+        let Some(root) = self.root.clone() else {
+            return "No git root".into();
+        };
+        let (label, f): (&'static str, fn(&std::path::Path) -> Result<String, String>) =
+            match action {
+                RemoteAction::Fetch => ("Fetching", |r| git_ops::fetch(r)),
+                RemoteAction::Pull => ("Pulling", |r| git_ops::pull(r)),
+                RemoteAction::PullRebase => ("Pull-rebasing", |r| git_ops::pull_rebase(r)),
+                RemoteAction::Push => ("Pushing", |r| git_ops::push(r)),
+            };
+        self.action_label = Some(label);
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.action_rx = Some(rx);
+        std::thread::spawn(move || {
+            let _ = tx.send(f(&root));
+        });
+        format!("⟳ {label}…")
     }
 
-    pub fn pull(&mut self) -> Result<(), String> {
-        let root = self.root.clone().ok_or_else(|| "No git root".to_string())?;
-        let msg = git_ops::pull(&root)?;
-        self.message = Some(msg);
-        self.refresh(Some(&root));
-        Ok(())
-    }
-
-    pub fn push(&mut self) -> Result<(), String> {
-        let root = self.root.clone().ok_or_else(|| "No git root".to_string())?;
-        let msg = git_ops::push(&root)?;
-        self.message = Some(msg);
-        self.refresh(Some(&root));
-        Ok(())
+    /// Finished remote-action message for the app status line.
+    pub fn take_app_message(&mut self) -> Option<String> {
+        self.app_msg.take()
     }
 
     pub fn checkout_selected_branch(&mut self) -> Result<(), String> {

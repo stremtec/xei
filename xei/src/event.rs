@@ -2610,38 +2610,19 @@ fn handle_git_workbench(app: &mut App, code: KeyCode) {
             Err(e) => app.message = e,
         },
         KeyCode::Char('f') if !matches!(app.git_wb.tab, GitTab::Auth) => {
-            match app.git_wb.fetch() {
-                Ok(()) => {
-                    app.message = app.git_wb.message.clone().unwrap_or_else(|| "Fetched".into())
-                }
-                Err(e) => app.message = e,
-            }
+            // Background — toolbar spinner plays; result lands via poll_loading.
+            app.message = app.git_wb.remote_action(xei_core::git_workbench::RemoteAction::Fetch);
         }
         KeyCode::Char('p') if !matches!(app.git_wb.tab, GitTab::Auth | GitTab::PullRequests) => {
-            match app.git_wb.pull() {
-                Ok(()) => {
-                    app.message = app.git_wb.message.clone().unwrap_or_else(|| "Pulled".into());
-                    app.refresh_git();
-                }
-                Err(e) => app.message = e,
-            }
+            app.message = app.git_wb.remote_action(xei_core::git_workbench::RemoteAction::Pull);
         }
         KeyCode::Char('R') if !matches!(app.git_wb.tab, GitTab::Auth) => {
-            match app.git_wb.pull_rebase() {
-                Ok(()) => {
-                    app.message = app.git_wb.message.clone().unwrap_or_default();
-                    app.refresh_git();
-                }
-                Err(e) => app.message = e,
-            }
+            app.message =
+                app.git_wb.remote_action(xei_core::git_workbench::RemoteAction::PullRebase);
         }
-        KeyCode::Char('u') => match app.git_wb.push() {
-            Ok(()) => {
-                app.message = app.git_wb.message.clone().unwrap_or_else(|| "Pushed".into());
-                app.refresh_git();
-            }
-            Err(e) => app.message = e,
-        },
+        KeyCode::Char('u') => {
+            app.message = app.git_wb.remote_action(xei_core::git_workbench::RemoteAction::Push);
+        }
         KeyCode::Char('r') => {
             let hint = app.filename.as_deref();
             if app.git_wb.tab == GitTab::Auth {

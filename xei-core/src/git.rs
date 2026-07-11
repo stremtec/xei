@@ -126,12 +126,9 @@ impl GitBlame {
 
     /// Open panel with slide-in (loads blame for `path`).
     pub fn open_panel(&mut self, path: &str) -> String {
-        self.refresh(path);
-        if !self.available {
-            self.open = false;
-            self.enabled = false;
-            return "Blame unavailable (not a git file?)".into();
-        }
+        // Optimistic open — `git blame` runs on a background thread and the
+        // panel fills (or closes with a message) when the result lands.
+        self.path = path.to_string();
         let from = if self.open || self.closing {
             self.snapshot_openness()
         } else {
@@ -144,7 +141,11 @@ impl GitBlame {
         self.anim_to = 1.0;
         self.anim_pending = true;
         self.opened_at = None;
-        format!("Blame · {} lines · Ctrl+B close", self.lines.len())
+        if self.lines.is_empty() {
+            "Blame · loading… · Ctrl+B close".into()
+        } else {
+            format!("Blame · {} lines · Ctrl+B close", self.lines.len())
+        }
     }
 
     /// Slide-out close.
@@ -180,34 +181,12 @@ impl GitBlame {
         self.toggle_panel(path)
     }
 
+    /// Sync wrapper (hot paths use App's async channel + `compute_blame`).
     pub fn refresh(&mut self, path: &str) {
-        self.lines.clear();
+        let (available, lines) = compute_blame(path);
         self.path = path.to_string();
-        self.available = false;
-        if path.is_empty() {
-            return;
-        }
-        let abs = std::fs::canonicalize(path).unwrap_or_else(|_| Path::new(path).to_path_buf());
-        let Some(parent) = abs.parent() else {
-            return;
-        };
-        let output = Command::new("git")
-            .args([
-                "blame",
-                "--line-porcelain",
-                "--",
-                abs.to_str().unwrap_or(path),
-            ])
-            .current_dir(parent)
-            .output();
-        let Ok(out) = output else {
-            return;
-        };
-        if !out.status.success() {
-            return;
-        }
-        self.available = true;
-        parse_blame_porcelain(&String::from_utf8_lossy(&out.stdout), &mut self.lines);
+        self.available = available;
+        self.lines = lines;
     }
 
     pub fn at(&self, row: usize) -> Option<&BlameLine> {
@@ -220,6 +199,37 @@ impl GitBlame {
 }
 
 /// Fixed **flame** palette — independent of editor theme.
+
+/// Blocking blame computation (runs on a background thread for the panel).
+pub fn compute_blame(path: &str) -> (bool, HashMap<usize, BlameLine>) {
+    let mut lines = HashMap::new();
+    if path.is_empty() {
+        return (false, lines);
+    }
+    let abs = std::fs::canonicalize(path).unwrap_or_else(|_| Path::new(path).to_path_buf());
+    let Some(parent) = abs.parent() else {
+        return (false, lines);
+    };
+    let output = Command::new("git")
+        .args([
+            "blame",
+            "--line-porcelain",
+            "--",
+            abs.to_str().unwrap_or(path),
+        ])
+        .current_dir(parent)
+        .output();
+    let Ok(out) = output else {
+        return (false, lines);
+    };
+    if !out.status.success() {
+        return (false, lines);
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    parse_blame_porcelain(&text, &mut lines);
+    (!lines.is_empty(), lines)
+}
+
 pub fn flame_color_for(key: &str) -> (u8, u8, u8) {
     // Warm fire: deep red → orange → gold → ember
     const FLAME: &[(u8, u8, u8)] = &[
@@ -295,6 +305,39 @@ pub fn parse_blame_porcelain(text: &str, out: &mut HashMap<usize, BlameLine>) {
     }
 }
 
+
+/// Blocking gutter computation (runs on a background thread).
+pub fn compute_gutter(path: &str) -> (bool, HashMap<usize, GitSign>) {
+    let mut signs = HashMap::new();
+    if path.is_empty() {
+        return (false, signs);
+    }
+    let abs = std::fs::canonicalize(path).unwrap_or_else(|_| Path::new(path).to_path_buf());
+    let Some(parent) = abs.parent() else {
+        return (false, signs);
+    };
+    let output = Command::new("git")
+        .args([
+            "diff",
+            "HEAD",
+            "--no-color",
+            "-U0",
+            "--",
+            abs.to_str().unwrap_or(path),
+        ])
+        .current_dir(parent)
+        .output();
+    let Ok(out) = output else {
+        return (false, signs);
+    };
+    if !out.status.success() && out.stdout.is_empty() {
+        return (false, signs);
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    parse_diff_hunks(&text, &mut signs);
+    (true, signs)
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct GitGutter {
     /// 0-based buffer line → sign
@@ -314,43 +357,12 @@ impl GitGutter {
         self.available = false;
     }
 
-    /// Refresh signs for `path` (absolute or relative file path).
+    /// Sync wrapper (hot paths use App's async channel + `compute_gutter`).
     pub fn refresh(&mut self, path: &str) {
-        self.signs.clear();
+        let (available, signs) = compute_gutter(path);
         self.path = path.to_string();
-        self.available = false;
-
-        if path.is_empty() {
-            return;
-        }
-        let abs = std::fs::canonicalize(path)
-            .unwrap_or_else(|_| Path::new(path).to_path_buf());
-        let Some(parent) = abs.parent() else {
-            return;
-        };
-
-        let output = Command::new("git")
-            .args([
-                "diff",
-                "HEAD",
-                "--no-color",
-                "-U0",
-                "--",
-                abs.to_str().unwrap_or(path),
-            ])
-            .current_dir(parent)
-            .output();
-
-        let Ok(out) = output else {
-            return;
-        };
-        // Not a git repo / git missing → empty is fine
-        if !out.status.success() && out.stdout.is_empty() {
-            return;
-        }
-        self.available = true;
-        let text = String::from_utf8_lossy(&out.stdout);
-        parse_diff_hunks(&text, &mut self.signs);
+        self.available = available;
+        self.signs = signs;
     }
 
     pub fn sign_at(&self, row: usize) -> Option<GitSign> {

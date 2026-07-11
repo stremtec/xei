@@ -9,12 +9,13 @@
 > rendering at 14px/cell then upscaling = the "blurry image" bug).
 >
 > **Open audit findings (next rounds):**
-> - **AF1 (med)** `refresh_git()` runs `git diff` + `git blame` synchronously
->   on the UI thread from ~38 call sites (every save/tab/pane switch) — big
->   repos will hitch; move to bg thread + poll like everything else.
-> - **AF2 (med)** git-workbench mutations (push/pull/checkout/commit/stash)
->   are synchronous `git`/`gh` shell-outs — seconds-long freezes on slow
->   remotes; same bg-thread treatment.
+> - **AF1 ✅ (07-12)** gutter/blame refresh now computes on a background
+>   thread (generation-tagged, applied via poll); blame panel opens
+>   optimistically and fills when the result lands.
+> - **AF2 ✅ (07-12)** fetch/pull/pull-rebase/push run on a background thread
+>   with the workbench toolbar spinner while in flight; local ops
+>   (commit/checkout/stash) stay sync (fast). SPC g f/p and the workbench
+>   keys share the same runner.
 > - **AF3 (low)** `undo_caching=true` spill files never compact — history
 >   appends across sessions unboundedly; add a size cap / rewrite-on-close.
 > - **AF4 (low)** preview soft-wrap desyncs the scrollbar page math (visual

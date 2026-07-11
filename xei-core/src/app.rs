@@ -239,6 +239,17 @@ pub struct App {
     /// Hook results from background threads (drained by poll_hook_messages).
     hook_msg_tx: std::sync::mpsc::Sender<String>,
     hook_msg_rx: std::sync::mpsc::Receiver<String>,
+    /// Async git gutter/blame refresh (latest generation wins).
+    #[allow(clippy::type_complexity)]
+    git_refresh_rx: Option<
+        std::sync::mpsc::Receiver<(
+            u64,
+            String,
+            (bool, std::collections::HashMap<usize, crate::git::GitSign>),
+            Option<(bool, std::collections::HashMap<usize, crate::git::BlameLine>)>,
+        )>,
+    >,
+    git_refresh_gen: u64,
     /// Show LSP code lenses in the editor.
     pub code_lens_enabled: bool,
     /// Detected terminal capabilities (filled by TUI shell at startup).
@@ -488,6 +499,8 @@ impl Default for App {
             update: crate::update::UpdateState::new(),
             hook_msg_tx,
             hook_msg_rx,
+            git_refresh_rx: None,
+            git_refresh_gen: 0,
             code_lens_enabled: true,
             term_caps_summary: String::new(),
             term_sync: false,
@@ -735,38 +748,65 @@ impl App {
         let _ = self.dap.persist_breakpoints();
     }
 
+    /// Non-blocking: `git diff` (+ `git blame` when the panel is up) run on a
+    /// background thread; results land via [`App::poll_git_refresh`].
     pub fn refresh_git(&mut self) {
         if let Some(ref p) = self.filename {
             let path = p.display().to_string();
-            self.git.refresh(&path);
-            if self.blame.enabled {
-                self.blame.refresh(&path);
-            }
+            let want_blame = self.blame.enabled || self.blame.open;
+            self.git_refresh_gen = self.git_refresh_gen.wrapping_add(1);
+            let generation = self.git_refresh_gen;
+            let (tx, rx) = std::sync::mpsc::channel();
+            self.git_refresh_rx = Some(rx);
+            std::thread::spawn(move || {
+                let gutter = crate::git::compute_gutter(&path);
+                let blame = if want_blame {
+                    Some(crate::git::compute_blame(&path))
+                } else {
+                    None
+                };
+                let _ = tx.send((generation, path, gutter, blame));
+            });
         } else {
             self.git.clear();
             self.blame.clear();
             self.blame.enabled = false;
         }
         self.rebuild_folds();
-        // Status-bar badge only needs branch/counts — never rebuild full graph
-        // here (that was a major source of editor lag after save/stage).
-        let hint = self.filename.as_deref();
-        let was_open = self.scm.open;
-        let msg = self.scm.message.clone();
-        let focus = self.scm.focus;
-        let selected = self.scm.selected;
-        let gsel = self.scm.graph_selected;
-        if was_open {
-            self.scm.refresh(hint);
-        } else {
-            self.scm.refresh_status(hint);
+    }
+
+    /// Apply a finished background git refresh (call once per frame).
+    pub fn poll_git_refresh(&mut self) -> bool {
+        use std::sync::mpsc::TryRecvError;
+        let Some(rx) = self.git_refresh_rx.take() else {
+            return false;
+        };
+        match rx.try_recv() {
+            Ok((generation, path, (g_avail, signs), blame)) => {
+                if generation != self.git_refresh_gen {
+                    return false;
+                }
+                self.git.path = path.clone();
+                self.git.available = g_avail;
+                self.git.signs = signs;
+                if let Some((b_avail, lines)) = blame {
+                    self.blame.path = path;
+                    self.blame.available = b_avail;
+                    self.blame.lines = lines;
+                    if !b_avail && self.blame.open {
+                        self.blame.close_panel();
+                        self.blame.enabled = false;
+                        self.message = "Blame unavailable (not a git file?)".into();
+                    }
+                }
+                true
+            }
+            Err(TryRecvError::Empty) => {
+                self.git_refresh_rx = Some(rx);
+                false
+            }
+            Err(TryRecvError::Disconnected) => false,
         }
-        self.scm.open = was_open;
-        self.scm.message = msg;
-        self.scm.focus = focus;
-        self.scm.selected = selected;
-        self.scm.graph_selected = gsel.min(self.scm.graph.len().saturating_sub(1));
-        self.scm.clamp_selected();
     }
 
     pub fn rebuild_folds(&mut self) {
@@ -3445,25 +3485,28 @@ impl App {
     }
 
     /// Run a simple git remote command (fetch / pull / push) from workspace root.
+    /// Network git ops run in the background (workbench runner + spinner);
+    /// the result lands in the status line via `poll_loading` in the frontend.
     pub fn git_remote(&mut self, action: &str) {
-        let hint = self.filename.as_deref();
-        let Some(root) = crate::git_ops::find_git_root(hint) else {
+        use crate::git_workbench::RemoteAction;
+        if self.git_wb.root.is_none() {
+            let hint = self.filename.as_deref();
+            self.git_wb.root = crate::git_ops::find_git_root(hint);
+        }
+        if self.git_wb.root.is_none() {
             self.message = String::from("Not a git repository");
             return;
-        };
-        let result = match action {
-            "fetch" => crate::git_ops::fetch(&root),
-            "pull" => crate::git_ops::pull(&root),
-            "push" => crate::git_ops::push(&root),
-            _ => Err(format!("unknown git action: {action}")),
-        };
-        match result {
-            Ok(msg) => {
-                self.message = msg.lines().next().unwrap_or("ok").to_string();
-                self.refresh_git();
-            }
-            Err(e) => self.message = e,
         }
+        let act = match action {
+            "fetch" => RemoteAction::Fetch,
+            "pull" => RemoteAction::Pull,
+            "push" => RemoteAction::Push,
+            _ => {
+                self.message = format!("unknown git action: {action}");
+                return;
+            }
+        };
+        self.message = self.git_wb.remote_action(act);
     }
 
     pub fn toggle_relative_number(&mut self) {

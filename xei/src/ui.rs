@@ -2992,10 +2992,17 @@ fn render_preview_pane(f: &mut Frame, app: &App, area: Rect, t: f32) {
             }
         }
     }
-    f.render_widget(
-        Paragraph::new(out).style(Style::default().fg(app.theme.fg).bg(bg)),
-        area,
-    );
+    // Long pretty lines follow the editor's wrap_lines setting once the
+    // transform settles: soft-wrap, or horizontal pan via h/l.
+    let mut para = Paragraph::new(out).style(Style::default().fg(app.theme.fg).bg(bg));
+    if t >= 1.0 {
+        if app.wrap_lines {
+            para = para.wrap(ratatui::widgets::Wrap { trim: false });
+        } else if app.preview.hscroll > 0 {
+            para = para.scroll((0, app.preview.hscroll.min(u16::MAX as usize) as u16));
+        }
+    }
+    f.render_widget(para, area);
 
     // Flat scrollbar along the right edge once settled.
     if t >= 1.0 && lines.len() > page {

@@ -1,5 +1,27 @@
 # Polish Backlog — bug audit (2026-07-10)
 
+> **Deep audit round (07-12, pre-GPU):** fixed — preview long lines now follow
+> `wrap_lines` (soft-wrap when true, `h`/`l` + horizontal wheel pan when
+> false); CSV preview gained real column alignment (width-aware incl. CJK,
+> 12-col/24-cell caps, ellipsis); NPY `shape` tuple no longer truncated at the
+> comma; image scaling switched nearest→bilinear and the pixel budget now
+> comes from the tty's real cell size (TIOCGWINSZ xpixel — Retina was
+> rendering at 14px/cell then upscaling = the "blurry image" bug).
+>
+> **Open audit findings (next rounds):**
+> - **AF1 (med)** `refresh_git()` runs `git diff` + `git blame` synchronously
+>   on the UI thread from ~38 call sites (every save/tab/pane switch) — big
+>   repos will hitch; move to bg thread + poll like everything else.
+> - **AF2 (med)** git-workbench mutations (push/pull/checkout/commit/stash)
+>   are synchronous `git`/`gh` shell-outs — seconds-long freezes on slow
+>   remotes; same bg-thread treatment.
+> - **AF3 (low)** `undo_caching=true` spill files never compact — history
+>   appends across sessions unboundedly; add a size cap / rewrite-on-close.
+> - **AF4 (low)** preview soft-wrap desyncs the scrollbar page math (visual
+>   rows ≠ source lines); cosmetic.
+> - **AF5 (low)** cell_px probe is startup-only — terminal font-size changes
+>   mid-session keep the old pixel budget until restart (SIGWINCH re-probe).
+
 > **v3.0.3 optimization build (07-11):** delta-based undo (804MB→4.5MB per
 > 300-edit session) + IN_RAM_MAX=50 SSD spill + `undo_caching` persistence;
 > idle CPU 54.8%→8.0% (buffer version gate kills the per-frame O(file) join,

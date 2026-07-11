@@ -23,6 +23,8 @@ pub struct TerminalCaps {
     pub hyperlinks: bool,
     /// Kitty graphics protocol (Phase B).
     pub kitty_graphics: bool,
+    /// Cell size in physical pixels (TIOCGWINSZ xpixel/cols; 0 = unknown).
+    pub cell_px: u32,
     /// Likely a GPU / modern terminal.
     pub modern: bool,
     /// Human-readable identity, e.g. "ghostty", "kitty".
@@ -37,6 +39,7 @@ impl Default for TerminalCaps {
             underline_color: false,
             hyperlinks: false,
             kitty_graphics: false,
+            cell_px: 0,
             modern: false,
             name: "unknown",
         }
@@ -104,8 +107,12 @@ impl TerminalCaps {
             caps.underline_color = true;
         }
 
+        caps.cell_px = probe_cell_px();
+
         caps
     }
+
+    // (cell_px probe lives at module level below)
 
     /// Optional active query for DEC 2026 support. Best-effort; may no-op.
     /// Must be called after raw mode is enabled, with stdin available.
@@ -208,6 +215,35 @@ pub fn drain_input_noise() {
     // Silence unused import warning path for KeyCode in some builds
     let _ = KeyCode::Esc;
     let _ = KeyEventKind::Press;
+}
+
+/// Physical pixels per cell from the tty (ghostty/kitty/wezterm/iTerm2 fill
+/// ws_xpixel). Retina hosts report ~28-34px; images rendered at 14px/cell and
+/// upscaled by the terminal were the "blurry image" bug.
+#[cfg(unix)]
+fn probe_cell_px() -> u32 {
+    #[repr(C)]
+    #[derive(Default)]
+    struct WinSize {
+        row: libc::c_ushort,
+        col: libc::c_ushort,
+        xpixel: libc::c_ushort,
+        ypixel: libc::c_ushort,
+    }
+    let mut ws = WinSize::default();
+    let ok = unsafe { libc::ioctl(0, libc::TIOCGWINSZ, &mut ws as *mut WinSize) } == 0;
+    if ok && ws.col > 0 && ws.xpixel > 0 {
+        let px = ws.xpixel as u32 / ws.col as u32;
+        if (4..=72).contains(&px) {
+            return px;
+        }
+    }
+    0
+}
+
+#[cfg(not(unix))]
+fn probe_cell_px() -> u32 {
+    0
 }
 
 #[cfg(test)]

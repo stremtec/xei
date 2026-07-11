@@ -194,12 +194,20 @@ fn handle_mouse(
         MouseEventKind::ScrollDown => route_scroll(app, column, row, 3),
         MouseEventKind::ScrollLeft => {
             if !app.wrap_lines {
-                app.hscroll = app.hscroll.saturating_sub(6);
+                if app.mode == Mode::Preview {
+                    app.preview.hscroll = app.preview.hscroll.saturating_sub(6);
+                } else {
+                    app.hscroll = app.hscroll.saturating_sub(6);
+                }
             }
         }
         MouseEventKind::ScrollRight => {
             if !app.wrap_lines {
-                app.hscroll = app.hscroll.saturating_add(6);
+                if app.mode == Mode::Preview {
+                    app.preview.hscroll = app.preview.hscroll.saturating_add(6);
+                } else {
+                    app.hscroll = app.hscroll.saturating_add(6);
+                }
             }
         }
         MouseEventKind::Down(MouseButton::Left) => {
@@ -2757,6 +2765,7 @@ fn handle_preview(app: &mut App, code: KeyCode) {
 
     // Image: arrow keys resize
     if matches!(app.preview.kind, Some(xei_core::PreviewKind::Image)) {
+        let cell_px = app.cell_px_or_default();
         match code {
             KeyCode::Esc | KeyCode::Char('q') => {
                 app.close_preview();
@@ -2765,15 +2774,20 @@ fn handle_preview(app: &mut App, code: KeyCode) {
             }
             KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('-') => {
                 if let Some(img) = app.preview_image.as_mut() {
-                    img.adjust_width(-4, 14);
+                    img.adjust_width(-4, cell_px);
                     app.message = format!("Image width {} cells", img.width_cells);
+                } else if !app.wrap_lines {
+                    // Text preview panning (wrap_lines = false)
+                    app.preview.hscroll = app.preview.hscroll.saturating_sub(6);
                 }
                 return;
             }
             KeyCode::Right | KeyCode::Char('l') | KeyCode::Char('+') | KeyCode::Char('=') => {
                 if let Some(img) = app.preview_image.as_mut() {
-                    img.adjust_width(4, 14);
+                    img.adjust_width(4, cell_px);
                     app.message = format!("Image width {} cells", img.width_cells);
+                } else if !app.wrap_lines {
+                    app.preview.hscroll = app.preview.hscroll.saturating_add(6);
                 }
                 return;
             }

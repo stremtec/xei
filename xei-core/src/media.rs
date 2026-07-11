@@ -56,7 +56,7 @@ pub struct ImageAsset {
 }
 
 impl ImageAsset {
-    pub fn load(path: &Path) -> Result<Self, String> {
+    pub fn load(path: &Path, cell_px: u32) -> Result<Self, String> {
         let data = std::fs::read(path).map_err(|e| e.to_string())?;
         let img = image::load_from_memory(&data).map_err(|e| e.to_string())?;
         let rgba = img.to_rgba8();
@@ -73,7 +73,7 @@ impl ImageAsset {
             cached_b64: String::new(),
             kitty_id: 88,
         };
-        asset.rebuild_cache(14);
+        asset.rebuild_cache(cell_px);
         Ok(asset)
     }
 
@@ -121,32 +121,80 @@ pub fn render_csv(text: &str, tsv: bool) -> Vec<PreviewLine> {
     ));
     out.push(pl(vec![("".into(), PreviewStyle::Normal)]));
 
+    // Parse first, then size columns so the table actually lines up.
+    const MAX_COLS: usize = 12;
+    const MAX_CELL_W: usize = 24;
+    let mut header: Vec<String> = Vec::new();
     let mut rows: Vec<Vec<String>> = Vec::new();
     for (i, line) in text.lines().take(200).enumerate() {
-        let cols = split_csv_line(line, sep);
+        let mut cols = split_csv_line(line, sep);
+        cols.truncate(MAX_COLS);
         if i == 0 {
-            let header = cols
-                .iter()
-                .map(|c| c.as_str())
-                .collect::<Vec<_>>()
-                .join(" │ ");
-            out.push(pl(vec![(format!("  {header}"), PreviewStyle::H3)]));
-            out.push(pl(vec![(
-                format!("  {}", "─".repeat(header.chars().count().min(72).max(8))),
-                PreviewStyle::Hr,
-            )]));
+            header = cols;
         } else {
             rows.push(cols);
         }
     }
+    let ncols = header
+        .len()
+        .max(rows.iter().map(|r| r.len()).max().unwrap_or(0));
+    let cell_w = |s: &str| -> usize {
+        s.chars()
+            .map(|c| unicode_width::UnicodeWidthChar::width(c).unwrap_or(1))
+            .sum()
+    };
+    let mut widths = vec![0usize; ncols];
+    for (c, w) in widths.iter_mut().enumerate() {
+        *w = std::iter::once(&header)
+            .chain(rows.iter())
+            .filter_map(|r| r.get(c))
+            .map(|s| cell_w(s).min(MAX_CELL_W))
+            .max()
+            .unwrap_or(1)
+            .max(1);
+    }
+    let fmt_row = |row: &[String]| -> String {
+        let mut s = String::from("  ");
+        for (c, w) in widths.iter().enumerate() {
+            let cell = row.get(c).map(|s| s.as_str()).unwrap_or("");
+            // Clip to the column budget, then pad to it (width-aware).
+            let mut taken = String::new();
+            let mut used = 0usize;
+            for ch in cell.chars() {
+                let cw = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1);
+                if used + cw > *w {
+                    if used < *w {
+                        taken.push('…');
+                        used += 1;
+                    }
+                    break;
+                }
+                taken.push(ch);
+                used += cw;
+            }
+            s.push_str(&taken);
+            s.push_str(&" ".repeat(w.saturating_sub(used)));
+            if c + 1 < widths.len() {
+                s.push_str(" │ ");
+            }
+        }
+        s
+    };
+    if !header.is_empty() {
+        out.push(pl(vec![(fmt_row(&header), PreviewStyle::H3)]));
+        let rule: usize = widths.iter().sum::<usize>() + widths.len().saturating_sub(1) * 3;
+        out.push(pl(vec![(
+            format!("  {}", "─".repeat(rule.clamp(8, 200))),
+            PreviewStyle::Hr,
+        )]));
+    }
     for (ri, row) in rows.iter().enumerate() {
-        let line = row.join(" │ ");
         let style = if ri % 2 == 0 {
             PreviewStyle::Normal
         } else {
             PreviewStyle::Dim
         };
-        out.push(pl(vec![(format!("  {line}"), style)]));
+        out.push(pl(vec![(fmt_row(row), style)]));
     }
     if text.lines().count() > 200 {
         out.push(pl(vec![(
@@ -258,7 +306,13 @@ fn npy_field(header: &str, key: &str) -> Option<String> {
         let end = rest.find('"')?;
         return Some(rest[..end].to_string());
     }
-    // bare True/False or tuple
+    // tuple — take through the closing paren (a bare `,` split would cut
+    // `(2, 3)` down to `(2`)
+    if rest.starts_with('(') {
+        let end = rest.find(')')?;
+        return Some(rest[..=end].to_string());
+    }
+    // bare True/False
     let end = rest
         .find(',')
         .or_else(|| rest.find('}'))

@@ -76,6 +76,7 @@ fn main() -> io::Result<()> {
 
     // Progressive GPU-terminal caps (gated later by app.gpu_acc).
     let caps = term_caps::TerminalCaps::detect();
+    app.cell_px = caps.cell_px;
     app.set_term_caps(
         caps.summary(),
         caps.sync_output,
@@ -170,7 +171,7 @@ fn paint_pet(
     last_pos: &mut (u16, u16),
     editor_cursor: Option<(u16, u16)>,
 ) -> bool {
-    const CELL_PX: u32 = 14;
+    let cell_px: u32 = if caps.cell_px >= 4 { caps.cell_px } else { 14 };
 
     let ok = app.pet.enabled
         && app.pet.has_frames()
@@ -191,7 +192,7 @@ fn paint_pet(
         return false;
     }
 
-    app.pet.ensure_display_cache(CELL_PX);
+    app.pet.ensure_display_cache(cell_px);
 
     let frame_changed = app.pet.tick();
     let idx = app.pet.frame_idx();

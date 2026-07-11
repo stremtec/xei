@@ -63,6 +63,8 @@ pub struct PreviewState {
     /// (see `anim_progress`), so synchronous open work can't eat the window.
     pub opened_at: Option<std::time::Instant>,
     pub anim_pending: bool,
+    /// Horizontal pan for long pretty lines (wrap_lines = false).
+    pub hscroll: usize,
     /// Openness endpoints for the current phase (0 = source, 1 = fully pretty).
     pub anim_from: f32,
     pub anim_to: f32,
@@ -130,6 +132,7 @@ impl Default for PreviewState {
             source_len: 0,
             opened_at: None,
             anim_pending: false,
+            hscroll: 0,
             anim_from: 0.0,
             anim_to: 1.0,
             closing: false,
@@ -162,6 +165,7 @@ impl PreviewState {
         self.closing = false;
         self.just_closed = false;
         self.scroll = 0;
+        self.hscroll = 0;
         self.lines.clear();
         self.kind = None;
         self.source_len = 0;

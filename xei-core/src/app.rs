@@ -249,6 +249,8 @@ pub struct App {
     pub term_undercurl: bool,
     pub term_underline_color: bool,
     pub term_hyperlinks: bool,
+    /// Physical pixels per cell (from the frontend probe; 0 = unknown → 14).
+    pub cell_px: u32,
     pub term_modern: bool,
     /// Terminal speaks Kitty graphics protocol (Ghostty/Kitty/WezTerm).
     pub term_kitty_graphics: bool,
@@ -491,6 +493,7 @@ impl Default for App {
             term_sync: false,
             term_undercurl: false,
             term_underline_color: false,
+            cell_px: 0,
             term_hyperlinks: false,
             term_modern: false,
             term_kitty_graphics: false,
@@ -1879,13 +1882,18 @@ impl App {
     }
 
     /// Open media / data preview from a filesystem path (explorer Enter).
+    /// Effective pixels-per-cell for image caches.
+    pub fn cell_px_or_default(&self) -> u32 {
+        if self.cell_px >= 4 { self.cell_px } else { 14 }
+    }
+
     pub fn open_media_preview(&mut self, path: &std::path::Path) -> Result<(), String> {
         self.clear_media_handles();
         self.preview.open_path(path)?;
         let kind = self.preview.kind;
         match kind {
             Some(crate::preview::PreviewKind::Image) => {
-                match crate::media::ImageAsset::load(path) {
+                match crate::media::ImageAsset::load(path, self.cell_px_or_default()) {
                     Ok(img) => {
                         self.message = format!(
                             "Image · {}×{} · ←/→ resize · Esc close",

@@ -300,23 +300,35 @@ fn load_frames(path: &Path) -> Result<Vec<PetFrame>, String> {
     }
 }
 
-/// Nearest-neighbor resize of RGBA to target size.
+/// Bilinear resize of RGBA to target size (nearest looked blocky once the
+/// terminal rescaled to real cell pixels).
 pub fn resize_rgba(src: &PetFrame, tw: u32, th: u32) -> Vec<u8> {
-    if tw == 0 || th == 0 {
-        return Vec::new();
-    }
-    if src.width == tw && src.height == th {
-        return src.rgba.clone();
-    }
+    let (sw, sh) = (src.width.max(1), src.height.max(1));
     let mut out = vec![0u8; (tw * th * 4) as usize];
+    if tw == 0 || th == 0 {
+        return out;
+    }
+    let fx = sw as f32 / tw as f32;
+    let fy = sh as f32 / th as f32;
     for y in 0..th {
-        let sy = y * src.height / th;
+        let sy = (y as f32 + 0.5) * fy - 0.5;
+        let y0 = sy.floor().max(0.0) as u32;
+        let y1 = (y0 + 1).min(sh - 1);
+        let wy = (sy - y0 as f32).clamp(0.0, 1.0);
         for x in 0..tw {
-            let sx = x * src.width / tw;
-            let si = ((sy * src.width + sx) * 4) as usize;
+            let sx = (x as f32 + 0.5) * fx - 0.5;
+            let x0 = sx.floor().max(0.0) as u32;
+            let x1 = (x0 + 1).min(sw - 1);
+            let wx = (sx - x0 as f32).clamp(0.0, 1.0);
             let di = ((y * tw + x) * 4) as usize;
-            if si + 3 < src.rgba.len() {
-                out[di..di + 4].copy_from_slice(&src.rgba[si..si + 4]);
+            for ch in 0..4 {
+                let p = |px: u32, py: u32| -> f32 {
+                    let i = ((py * sw + px) * 4) as usize + ch;
+                    src.rgba.get(i).copied().unwrap_or(0) as f32
+                };
+                let top = p(x0, y0) * (1.0 - wx) + p(x1, y0) * wx;
+                let bot = p(x0, y1) * (1.0 - wx) + p(x1, y1) * wx;
+                out[di + ch] = (top * (1.0 - wy) + bot * wy).round() as u8;
             }
         }
     }

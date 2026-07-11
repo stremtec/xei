@@ -77,6 +77,20 @@ fn route_scroll(app: &mut App, column: u16, row: u16, delta: isize) {
         app.dap.move_focus(delta);
         return;
     }
+    // XLC panel under the pointer (its output log scrolls; the editor above
+    // keeps normal wheel behavior).
+    if app.mode == Mode::XlcInput
+        && app.xlc.open
+        && app.xlc_separator_y > 0
+        && row >= app.xlc_separator_y
+    {
+        if delta < 0 {
+            app.xlc.scroll_up(3);
+        } else {
+            app.xlc.scroll_down(3);
+        }
+        return;
+    }
     // Surface-active modes.
     match app.mode {
         Mode::Explorer => {

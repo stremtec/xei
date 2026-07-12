@@ -2,7 +2,9 @@
 set -euo pipefail
 
 REPO="stremtec/xei"
-VERSION="${VERSION:-v3.0.8}"
+# Empty = latest release (resolved by GitHub's /releases/latest/download).
+# Pin a specific build with:  VERSION=v3.0.8 curl … | bash
+VERSION="${VERSION:-}"
 
 case "$(uname -s)" in
   Darwin)
@@ -29,8 +31,14 @@ mkdir -p "$DEST"
 
 install_bin() {
   local name="$1"
-  local url="https://github.com/${REPO}/releases/download/${VERSION}/${name}-${TARGET}.gz"
-  echo "→ Downloading ${name} ${VERSION} for ${TARGET}..."
+  local url
+  if [ -z "$VERSION" ]; then
+    url="https://github.com/${REPO}/releases/latest/download/${name}-${TARGET}.gz"
+    echo "→ Downloading latest ${name} for ${TARGET}..."
+  else
+    url="https://github.com/${REPO}/releases/download/${VERSION}/${name}-${TARGET}.gz"
+    echo "→ Downloading ${name} ${VERSION} for ${TARGET}..."
+  fi
   if curl -fsSL "$url" | gunzip > "${DEST}/${name}"; then
     chmod +x "${DEST}/${name}"
     echo "  ✓ ${name} installed to ${DEST}/${name}"

@@ -1,15 +1,20 @@
 # xei Windows installer — run in PowerShell
 # iwr https://raw.githubusercontent.com/stremtec/xei/master/install.ps1 | iex
 
-$VERSION = "v3.0.8"
+# Empty = latest release; pin with:  $env:VERSION="v3.0.8"; iwr … | iex
+$VERSION = $env:VERSION
 $REPO = "stremtec/xei"
 $TARGET = "x86_64-pc-windows-gnu"
 $BIN = "xei.exe"
 
 $DEST = "$env:USERPROFILE\.local\bin"
-$URL = "https://github.com/$REPO/releases/download/$VERSION/xei-$TARGET.exe.gz"
-
-Write-Host "→ Downloading xei $VERSION..." -ForegroundColor Cyan
+if ([string]::IsNullOrEmpty($VERSION)) {
+    $URL = "https://github.com/$REPO/releases/latest/download/xei-$TARGET.exe.gz"
+    Write-Host "→ Downloading latest xei..." -ForegroundColor Cyan
+} else {
+    $URL = "https://github.com/$REPO/releases/download/$VERSION/xei-$TARGET.exe.gz"
+    Write-Host "→ Downloading xei $VERSION..." -ForegroundColor Cyan
+}
 
 New-Item -ItemType Directory -Force -Path $DEST | Out-Null
 

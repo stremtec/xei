@@ -7,7 +7,10 @@ const { get } = require("https");
 const { createGunzip } = require("zlib");
 const { pipeline } = require("stream");
 
-const VERSION = "v3.0.8";
+// Match the installed npm package version so the downloaded binary can't drift
+// from it — no hardcoded version to bump. (package.json ships in the tarball.)
+const { version } = require("./package.json");
+const VERSION = `v${version}`;
 const EXE = platform === "win32" ? ".exe" : "";
 const BIN_DIR = join(__dirname, "bin");
 const BIN_PATH = join(BIN_DIR, `xei${EXE}`);

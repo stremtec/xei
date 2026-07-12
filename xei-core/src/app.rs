@@ -2402,6 +2402,21 @@ impl App {
         }
     }
 
+    /// Insert pasted text at the cursor verbatim (no auto-indent — a bracketed
+    /// paste from the outer terminal should land exactly as-is). Used by the
+    /// TUI's `Event::Paste` handler in editor Insert mode.
+    pub fn paste_text_at_cursor(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        self.push_undo();
+        let clean = text.replace('\r', "");
+        self.buffer.insert_str(&clean);
+        self.update_scroll();
+        self.sync_lsp_document();
+        self.message = String::from("Pasted");
+    }
+
     /// Select entire buffer (Ctrl+A / context menu).
     pub fn select_all(&mut self) {
         let last = self.buffer.line_count().saturating_sub(1);
@@ -3562,10 +3577,14 @@ impl App {
 
     pub fn toggle_relative_number(&mut self) {
         self.relative_number = !self.relative_number;
+        // Persist like theme changes so `SPC t r` survives restart.
+        let mut cfg = config::load();
+        cfg.relative_number = self.relative_number;
+        config::save(&cfg);
         self.message = if self.relative_number {
-            "relative_number on".into()
+            "relative_number on (saved)".into()
         } else {
-            "relative_number off".into()
+            "relative_number off (saved)".into()
         };
     }
 

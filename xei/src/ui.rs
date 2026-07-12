@@ -4644,6 +4644,34 @@ fn draw_editor_inactive_pane(f: &mut Frame, app: &App, area: Rect, pane_idx: usi
     let text_width = content_width.saturating_sub(gutter_w).max(1);
     let visible_height = area.height as usize;
 
+    // Relative numbers must match the focused pane so numbering doesn't flip
+    // when focus moves: use them only when this pane shows the buffer that holds
+    // the live cursor AND that cursor line is visible here; otherwise absolute
+    // (no focus-dependent flip, no giant distance-to-offscreen-cursor values).
+    let cursor_row = app.buffer.cursor.row;
+    let use_relative = app.relative_number && pane.tab_index == app.current_buffer;
+    let cursor_on_screen = use_relative && cursor_row >= scroll && {
+        let mut h = 0usize;
+        let mut on = false;
+        for i in scroll..all_lines.len() {
+            if h >= visible_height {
+                break;
+            }
+            if i == cursor_row {
+                on = true;
+                break;
+            }
+            let vis = inactive_visual_width(&all_lines[i]);
+            let rows = if !app.wrap_lines || vis == 0 {
+                1
+            } else {
+                (vis + text_width - 1) / text_width
+            };
+            h += rows;
+        }
+        on
+    };
+
     let mut lines: Vec<Line> = Vec::new();
     let mut used = 0usize;
     for (idx, text) in all_lines.iter().enumerate().skip(scroll) {
@@ -4663,7 +4691,11 @@ fn draw_editor_inactive_pane(f: &mut Frame, app: &App, area: Rect, pane_idx: usi
             let v0 = seg * text_width;
             let v1 = (v0 + text_width).min(vis.max(1));
             let num = if seg == 0 {
-                format!("{:>3}", idx + 1)
+                if cursor_on_screen && idx != cursor_row {
+                    format!("{:>3}", (idx as isize - cursor_row as isize).unsigned_abs())
+                } else {
+                    format!("{:>3}", idx + 1)
+                }
             } else {
                 "   ".into()
             };
@@ -4811,6 +4843,42 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
         app.hscroll = 0;
     }
 
+    // Relative line numbers are only meaningful while the cursor line is on
+    // screen. A wheel / PageUp scroll moves the view but not the cursor, so the
+    // cursor can sit far outside the viewport — then distance-to-cursor renders
+    // as giant, backwards-counting "tangled" numbers (e.g. 4000 at the very
+    // top). Detect that here (mirroring the render loop's row accounting) and
+    // fall back to absolute numbers; relative resumes once a motion pulls the
+    // cursor back into view via update_scroll().
+    let cursor_on_screen = if !app.relative_number {
+        true // unused in absolute mode — skip the scan
+    } else if cursor_row < scroll {
+        false // cursor scrolled above the viewport
+    } else {
+        let mut h = 0usize;
+        let mut on = false;
+        for idx in scroll..all_lines.len() {
+            if h >= visible_height {
+                break;
+            }
+            if app.folds.is_hidden(idx) {
+                continue;
+            }
+            if idx == cursor_row {
+                on = true;
+                break;
+            }
+            let vis = visual_line_width(app, idx);
+            let rows = if !app.wrap_lines || vis == 0 {
+                1
+            } else {
+                (vis + text_width - 1) / text_width
+            };
+            h += rows;
+        }
+        on
+    };
+
     // Rebuild screen-row maps (must match rendered segments exactly).
     app.screen_row_to_buffer.clear();
     app.screen_row_visual_base.clear();
@@ -4906,7 +4974,7 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
             app.screen_row_visual_base.push(v0);
 
             let num = if seg == 0 {
-                if app.relative_number && !is_cursor_line {
+                if app.relative_number && cursor_on_screen && !is_cursor_line {
                     let dist = (idx as isize - cursor_row as isize).unsigned_abs();
                     format!("{:>3}", dist)
                 } else {
@@ -6396,6 +6464,84 @@ mod tests {
         term.draw(|f| draw(f, &mut app)).unwrap();
         let text = frame_text(&term);
         assert!(text.contains("restart xei"), "frame:\n{}", text);
+    }
+
+    /// 100-line buffer with relative numbers on (the reported config).
+    fn tall_relative_app() -> App {
+        let mut app = App::new();
+        let src: String = (0..100).map(|i| format!("line{}\n", i)).collect();
+        app.buffer = Buffer::from_string(&src);
+        app.relative_number = true;
+        app.wrap_lines = false;
+        app
+    }
+
+    // Gutter char at screen row `y` where the 3-wide right-aligned number's
+    // ones digit lands: `git_ch`(0) + `{:>3}`(1..=3) + pad(4).
+    fn gutter_ones(term: &Terminal<TestBackend>, y: u16) -> String {
+        term.backend().buffer()[(3u16, y)].symbol().to_string()
+    }
+
+    #[test]
+    fn relative_numbers_fall_back_to_absolute_when_cursor_offscreen() {
+        // Reproduces the "맨 위인데 4000" bug: cursor deep in the file, view
+        // wheel-scrolled to the top (scroll moves, cursor doesn't).
+        let mut app = tall_relative_app();
+        app.buffer.cursor.row = 80;
+        app.scroll = 0;
+        let backend = TestBackend::new(80, 24);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| draw_editor(f, &mut app, Rect::new(0, 0, 80, 24)))
+            .unwrap();
+        // Top line must read as absolute "1" (ascending), not distance "80".
+        assert_eq!(gutter_ones(&term, 0), "1", "top gutter should be absolute 1");
+        assert_eq!(gutter_ones(&term, 1), "2", "second line should be absolute 2");
+    }
+
+    #[test]
+    fn relative_numbers_show_distance_when_cursor_visible() {
+        // When the cursor is on screen, relative distances are correct.
+        let mut app = tall_relative_app();
+        app.buffer.cursor.row = 3;
+        app.scroll = 0;
+        let backend = TestBackend::new(80, 24);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| draw_editor(f, &mut app, Rect::new(0, 0, 80, 24)))
+            .unwrap();
+        // Row 0 is 3 lines above the cursor → relative "3".
+        assert_eq!(gutter_ones(&term, 0), "3", "distance to cursor");
+        // The cursor line itself shows its absolute number "4".
+        assert_eq!(gutter_ones(&term, 3), "4", "cursor line is absolute");
+    }
+
+    #[test]
+    fn inactive_pane_matches_focused_relative_numbering() {
+        // The reported bug: numbering flipped absolute↔relative when focus moved
+        // between panes. The inactive pane must show the SAME relative distance
+        // as the focused one (when it shows the live-cursor buffer, cursor on
+        // screen), not fall back to absolute.
+        let src: String = (0..100).map(|i| format!("line{}\n", i)).collect();
+        let mut app = App::new();
+        app.relative_number = true;
+        app.wrap_lines = false;
+        app.buffer = Buffer::from_string(&src);
+        app.buffer.cursor.row = 3;
+        app.buffers[0].buffer = Buffer::from_string(&src);
+        app.current_buffer = 0;
+        app.split.kind = xei_core::split::SplitKind::Vertical;
+        app.split.panes = vec![
+            xei_core::split::Pane::default(),
+            xei_core::split::Pane::default(),
+        ];
+        app.split.focus = 0; // pane 1 is inactive
+        let backend = TestBackend::new(40, 24);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| draw_editor_inactive_pane(f, &app, Rect::new(0, 0, 40, 24), 1))
+            .unwrap();
+        let buf = term.backend().buffer().clone();
+        // Inactive gutter is " {:>3} " → ones digit at col 3. Top line (idx 0) is
+        // 3 above the cursor → relative "3", NOT absolute "1" (the flip bug).
+        assert_eq!(buf[(3u16, 0u16)].symbol(), "3");
     }
 }
 

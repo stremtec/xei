@@ -34,6 +34,8 @@ pub struct Terminal {
     mouse_reporting: bool,
     /// DECCKM — application cursor keys (arrows as ESC O A..D).
     app_cursor_keys: bool,
+    /// Child enabled bracketed paste (DECSET 2004) — wrap forwarded pastes.
+    bracketed_paste: bool,
     /// PTY master — kept alive for `resize` (TIOCSWINSZ + SIGWINCH).
     master: Option<Box<dyn MasterPty + Send>>,
     child: Option<Box<dyn portable_pty::Child + Send + Sync>>,
@@ -145,6 +147,7 @@ impl Default for Terminal {
             scroll_offset: 0,
             mouse_reporting: false,
             app_cursor_keys: false,
+            bracketed_paste: false,
             master: None,
             child: None,
             writer: None,
@@ -311,6 +314,7 @@ impl Terminal {
         self.scroll_offset = 0;
         self.mouse_reporting = false;
         self.app_cursor_keys = false;
+        self.bracketed_paste = false;
         self.fg = Color::Default;
         self.bg = Color::Default;
         self.bold = false;
@@ -341,6 +345,7 @@ impl Terminal {
         self.scroll_offset = 0;
         self.mouse_reporting = false;
         self.app_cursor_keys = false;
+        self.bracketed_paste = false;
         self.fg = Color::Default;
         self.bg = Color::Default;
         self.bold = false;
@@ -353,6 +358,25 @@ impl Terminal {
         if let Some(ref mut w) = self.writer {
             let _ = w.write_all(bytes);
             let _ = w.flush();
+        }
+    }
+
+    /// Forward pasted text to the child. When the child enabled bracketed paste
+    /// (DECSET 2004), wrap it in `\x1b[200~ … \x1b[201~` so TUIs (claude, vim,
+    /// fish) treat it as one paste — not typed keys that auto-submit on newline.
+    /// This is what makes Cmd+V and file drag-drop deliver a path/blob intact.
+    pub fn paste_input(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        if self.bracketed_paste {
+            let mut buf = Vec::with_capacity(text.len() + 12);
+            buf.extend_from_slice(b"\x1b[200~");
+            buf.extend_from_slice(text.as_bytes());
+            buf.extend_from_slice(b"\x1b[201~");
+            self.write_input(&buf);
+        } else {
+            self.write_input(text.as_bytes());
         }
     }
 
@@ -675,8 +699,10 @@ impl Terminal {
             1 => self.app_cursor_keys = enable,
             // The inner app asked for mouse events — the shell forwards wheel.
             1000 | 1002 | 1003 => self.mouse_reporting = enable,
-            // Cursor visibility, bracketed paste, SGR encoding, focus — ignore
-            25 | 2004 | 1006 | 1004 | 7 | 12 => {}
+            // Bracketed paste — remember so forwarded pastes get wrapped.
+            2004 => self.bracketed_paste = enable,
+            // Cursor visibility, SGR encoding, focus — ignore
+            25 | 1006 | 1004 | 7 | 12 => {}
             _ => {}
         }
     }

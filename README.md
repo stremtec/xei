@@ -48,6 +48,7 @@ iwr https://raw.githubusercontent.com/stremtec/xei/master/xei/install.ps1 | iex
 - **System clipboard** — `Cmd+C`/`V`/`X`, `y`/`d`/`p` sync to OS (pbcopy / xclip / wl-copy + OSC 52)
 - **Inline preview images** — `![alt](local.png)` in the Markdown preview renders the actual picture (Kitty graphics; Ghostty/Kitty/WezTerm), sized to the terminal's real cell pixels
 - **Terminal scrollback** — wheel / PageUp scrolls history (`↑N` badge); wheel forwards to mouse-aware TUIs (claude, vim); CJK-correct rendering
+- **Terminal paste & file drop** — `Cmd+V` / `Ctrl+Shift+V` paste into the built-in terminal (bracketed-paste, so agent CLIs see one paste); **drag a file onto the window** to hand its path to the child (e.g. attach an image to claude-code). A bitmap on the clipboard is saved to a temp PNG and pasted as a path
 - **Command palette** — `Ctrl+P` files, `Ctrl+Shift+P` commands, `:problems`
 - **Diagnostics** — `]d`/`[d` jump, problems list; `K` LSP hover
 - **Mouse support** — click tabs, drag select, double-click word, scroll, panel resize

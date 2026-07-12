@@ -29,6 +29,10 @@ pub fn handle_events(app: &mut App) -> io::Result<(bool, bool)> {
                 handle_mouse(app, mouse.kind, mouse.column, mouse.row, mouse.modifiers);
             }
             Event::Resize(_w, _h) => had_event = true,
+            Event::Paste(text) => {
+                had_event = true;
+                handle_paste(app, text);
+            }
             _ => {}
         }
         if !event::poll(std::time::Duration::from_millis(0))? {
@@ -36,6 +40,55 @@ pub fn handle_events(app: &mut App) -> io::Result<(bool, bool)> {
         }
     }
     Ok((app.running, had_event))
+}
+
+/// Outer-terminal paste OR file drag-drop (both arrive as bracketed paste →
+/// `Event::Paste`). When a terminal is focused, forward to the child PTY — this
+/// is what lets a dropped file's path reach claude-code (image attach). Else
+/// route into the focused editor / input surface.
+fn handle_paste(app: &mut App, text: String) {
+    if text.is_empty() {
+        return;
+    }
+    if app.terminal_window_focused() || (app.terminal.open && app.mode == Mode::Terminal) {
+        app.terminal.paste_input(&text);
+        return;
+    }
+    match app.mode {
+        Mode::Insert => app.paste_text_at_cursor(&text),
+        Mode::Search => {
+            for c in text.chars() {
+                if !c.is_control() {
+                    app.search_input.push(c);
+                }
+            }
+            app.update_search_input();
+        }
+        Mode::XlcInput => {
+            for c in text.chars() {
+                if !c.is_control() {
+                    app.xlc.input.push(c);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Paste the OS clipboard into the focused terminal's PTY: text if present,
+/// otherwise an image on the clipboard written to a temp PNG whose path is
+/// pasted (claude-code accepts image file paths).
+fn paste_clipboard_to_terminal(app: &mut App) {
+    if let Some(text) = xei_core::clipboard::paste() {
+        if !text.is_empty() {
+            app.terminal.paste_input(&text);
+            return;
+        }
+    }
+    if let Some(p) = xei_core::clipboard::paste_image_to_temp() {
+        app.terminal.paste_input(&p.to_string_lossy());
+        app.message = String::from("Pasted image → terminal");
+    }
 }
 fn rect_contains(rect: Option<(u16, u16, u16, u16)>, column: u16, row: u16) -> bool {
     rect.map(|(x, y, w, h)| {
@@ -889,6 +942,14 @@ fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
                 return;
             }
             KeyCode::Char('v') | KeyCode::Char('V') => {
+                // Terminal focused → paste into the child PTY (text or image path),
+                // not the editor. (Pane-window terminal is handled earlier.)
+                if app.terminal_window_focused()
+                    || (app.terminal.open && app.mode == Mode::Terminal)
+                {
+                    paste_clipboard_to_terminal(app);
+                    return;
+                }
                 // Shift+V under cmd_like → pretty preview toggle (VS Code Markdown preview).
                 if modifiers.contains(KeyModifiers::SHIFT) {
                     if matches!(
@@ -4230,6 +4291,14 @@ fn handle_pane_terminal_window(
         && matches!(code, KeyCode::Char('w') | KeyCode::Char('W'))
     {
         app.request_close_pane_terminal();
+        return true;
+    }
+    // Cmd+V / Ctrl+Shift+V — paste clipboard into the child (text or image path).
+    // Must precede the Ctrl-byte block below (else Ctrl+Shift+V → literal 0x16).
+    if (super_key || (ctrl && shift))
+        && matches!(code, KeyCode::Char('v') | KeyCode::Char('V'))
+    {
+        paste_clipboard_to_terminal(app);
         return true;
     }
     // Ctrl+W alone — start split chord so user can focus the other pane

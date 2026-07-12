@@ -2,7 +2,9 @@ use std::env;
 use std::io::{self, Write};
 
 use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
+    event::{
+        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -50,6 +52,7 @@ fn main() -> io::Result<()> {
         let _ = execute!(
             io::stdout(),
             crossterm::event::PopKeyboardEnhancementFlags,
+            DisableBracketedPaste,
             LeaveAlternateScreen,
             DisableMouseCapture
         );
@@ -102,7 +105,10 @@ fn main() -> io::Result<()> {
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    // Bracketed paste: the outer terminal wraps pastes AND file drag-drops in
+    // \x1b[200~..201~, delivered to us as Event::Paste. This is what lets a
+    // dropped file's path reach the built-in terminal (→ claude image attach).
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste)?;
 
     // Kitty keyboard protocol (CSI-u) when the terminal offers it — without
     // this, Ctrl+Shift chords are indistinguishable from plain Ctrl ones on
@@ -149,6 +155,7 @@ fn main() -> io::Result<()> {
     }
     execute!(
         terminal.backend_mut(),
+        DisableBracketedPaste,
         LeaveAlternateScreen,
         DisableMouseCapture
     )?;

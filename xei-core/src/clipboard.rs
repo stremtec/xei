@@ -10,6 +10,7 @@
 //! 1. `pbpaste` / `wl-paste` / `xclip -o` / `xsel -o`
 
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// Copy `text` to the OS clipboard. Returns whether at least one backend succeeded.
@@ -74,6 +75,56 @@ pub fn paste() -> Option<String> {
     None
 }
 
+/// Best-effort: if the OS clipboard holds an **image** (not text), write it to a
+/// temp PNG and return the path. Used so pasting / dropping an image into the
+/// built-in terminal hands the child (e.g. claude-code) a real file path.
+/// Returns `None` when there is no image or no capable tool — callers fall back
+/// to text paste, so this never breaks the normal path.
+pub fn paste_image_to_temp() -> Option<PathBuf> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let path = std::env::temp_dir().join(format!("xei-clip-{stamp}.png"));
+    let p = path.to_string_lossy().to_string();
+
+    // macOS: pngpaste converts any clipboard image (PNG/TIFF/…) to PNG.
+    if which("pngpaste") && run_ok(&["pngpaste", &p]) && file_nonempty(&path) {
+        return Some(path);
+    }
+    // macOS fallback: AppleScript coercion to PNG (fails cleanly if no image).
+    if which("osascript") {
+        let script = format!(
+            "try\nset f to (open for access (POSIX file \"{p}\") with write permission)\nwrite (the clipboard as «class PNGf») to f\nclose access f\nreturn \"ok\"\non error\ntry\nclose access (POSIX file \"{p}\")\nend try\nreturn \"no\"\nend try"
+        );
+        let ok = run_stdout(&["osascript", "-e", &script])
+            .map(|s| s.trim() == "ok")
+            .unwrap_or(false);
+        if ok && file_nonempty(&path) {
+            return Some(path);
+        }
+    }
+    // Wayland
+    if which("wl-paste")
+        && run_capture_to_file(&["wl-paste", "-t", "image/png"], &path)
+        && file_nonempty(&path)
+    {
+        return Some(path);
+    }
+    // X11
+    if which("xclip")
+        && run_capture_to_file(
+            &["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
+            &path,
+        )
+        && file_nonempty(&path)
+    {
+        return Some(path);
+    }
+    let _ = std::fs::remove_file(&path);
+    None
+}
+
 /// Whether a clipboard tool appears available (best-effort).
 pub fn available() -> bool {
     which("pbcopy")
@@ -127,6 +178,39 @@ fn pipe_to(cmd: &[&str], text: &str) -> bool {
         Ok(status) => status.success(),
         Err(_) => false,
     }
+}
+
+fn run_ok(cmd: &[&str]) -> bool {
+    if cmd.is_empty() {
+        return false;
+    }
+    Command::new(cmd[0])
+        .args(&cmd[1..])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn run_capture_to_file(cmd: &[&str], path: &Path) -> bool {
+    if cmd.is_empty() {
+        return false;
+    }
+    let Ok(file) = std::fs::File::create(path) else {
+        return false;
+    };
+    Command::new(cmd[0])
+        .args(&cmd[1..])
+        .stdout(Stdio::from(file))
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+fn file_nonempty(path: &Path) -> bool {
+    std::fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false)
 }
 
 fn run_stdout(cmd: &[&str]) -> Option<String> {

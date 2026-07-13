@@ -187,15 +187,56 @@ impl Buffer {
     }
 
     /// Insert multi-line text at the cursor (snippets / paste-like).
+    ///
+    /// Bulk splice rather than char-by-char: a per-char `insert_char` walks
+    /// `char_to_byte` (O(col)) and memmoves the line tail (O(len)) on every
+    /// character, making a single long paste O(n²). Splitting on `\n` and
+    /// splicing whole segments keeps it O(n). Final cursor position matches the
+    /// old char-by-char behaviour exactly.
     pub fn insert_str(&mut self, s: &str) {
+        if s.is_empty() {
+            return;
+        }
         self.touch();
-        for ch in s.chars() {
-            if ch == '\n' {
-                self.insert_newline();
+        let row = self.cursor.row;
+        let line = &mut self.lines[row];
+        let byte = char_to_byte(self.cursor.col, line);
+
+        if !s.contains('\n') {
+            // Single-line fast path: one splice into the current line.
+            line.insert_str(byte, s);
+            self.cursor.col += s.chars().count();
+            return;
+        }
+
+        // Multi-line: split the current line at the cursor, weld the paste's
+        // first segment onto the head and its last segment onto the tail.
+        let tail: String = line[byte..].to_string();
+        line.truncate(byte);
+
+        let mut segs = s.split('\n');
+        let first = segs.next().unwrap_or("");
+        self.lines[row].push_str(first);
+
+        let rest: Vec<&str> = segs.collect();
+        let n = rest.len();
+        let mut new_lines: Vec<String> = Vec::with_capacity(n);
+        let mut last_col = 0usize;
+        for (i, seg) in rest.iter().enumerate() {
+            if i == n - 1 {
+                last_col = seg.chars().count();
+                let mut l = String::with_capacity(seg.len() + tail.len());
+                l.push_str(seg);
+                l.push_str(&tail);
+                new_lines.push(l);
             } else {
-                self.insert_char(ch);
+                new_lines.push((*seg).to_string());
             }
         }
+        let at = row + 1;
+        self.lines.splice(at..at, new_lines);
+        self.cursor.row = row + n;
+        self.cursor.col = last_col;
     }
 
     pub fn insert_char_pair(&mut self, open: char, close: char) {
@@ -899,6 +940,50 @@ mod tests {
         buf.cursor = Position::new(0, 1);
         buf.replace_char('야');
         assert_eq!(buf.line(0), "한야글");
+    }
+
+    #[test]
+    fn test_insert_str_single_line() {
+        let mut buf = Buffer::from_string("HELLO");
+        buf.cursor = Position::new(0, 2);
+        buf.insert_str("xyz");
+        assert_eq!(buf.line(0), "HExyzLLO");
+        assert_eq!(buf.cursor, Position::new(0, 5));
+    }
+
+    #[test]
+    fn test_insert_str_multi_line() {
+        let mut buf = Buffer::from_string("HELLO");
+        buf.cursor = Position::new(0, 2);
+        buf.insert_str("a\nb\nc");
+        assert_eq!(buf.line_count(), 3);
+        assert_eq!(buf.line(0), "HEa");
+        assert_eq!(buf.line(1), "b");
+        assert_eq!(buf.line(2), "cLLO");
+        assert_eq!(buf.cursor, Position::new(2, 1));
+    }
+
+    #[test]
+    fn test_insert_str_matches_charwise() {
+        // Batch insert_str must match the old char-by-char semantics exactly.
+        let cases = ["", "abc", "a\n", "\nx", "one\ntwo\nthree", "한\n글", "\n\n"];
+        for s in cases {
+            let mut batch = Buffer::from_string("PREsuf");
+            batch.cursor = Position::new(0, 3);
+            batch.insert_str(s);
+
+            let mut naive = Buffer::from_string("PREsuf");
+            naive.cursor = Position::new(0, 3);
+            for ch in s.chars() {
+                if ch == '\n' {
+                    naive.insert_newline();
+                } else {
+                    naive.insert_char(ch);
+                }
+            }
+            assert_eq!(batch.text(), naive.text(), "text mismatch for {s:?}");
+            assert_eq!(batch.cursor, naive.cursor, "cursor mismatch for {s:?}");
+        }
     }
 
     #[test]

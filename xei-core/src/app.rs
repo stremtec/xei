@@ -63,6 +63,21 @@ pub enum Mode {
     Rebase,
     /// PR multi-file review surface
     PrReview,
+    /// Live self-benchmark results screen (`:bench`)
+    Bench,
+}
+
+/// Sampled resource usage of the xei process, filled by the frontend for the
+/// `:status` line. GPU is `None` where no per-process figure is obtainable
+/// (e.g. macOS without elevated tooling) and renders as `—`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ProcMetrics {
+    pub cpu_pct: f32,
+    pub mem_pct: f32,
+    pub mem_mb: f32,
+    pub gpu_pct: Option<f32>,
+    /// Set once the first sample lands, so the UI can show `…` until then.
+    pub sampled: bool,
 }
 
 pub struct App {
@@ -128,6 +143,13 @@ pub struct App {
     pub syntax: SyntaxEngine,
     pub lsp: LspClient,
     pub debug: bool,
+    /// `:status` — show live CPU/MEM/GPU of this process in the status line.
+    /// The frontend samples (platform-specific) and writes into `metrics`; core
+    /// only owns the toggle + the last-sampled snapshot for rendering.
+    pub show_metrics: bool,
+    pub metrics: ProcMetrics,
+    /// Latest `:bench` results (shown in `Mode::Bench`).
+    pub bench_report: Option<crate::bench::BenchReport>,
     /// Last change for `.` repeat
     pub last_change: Option<LastChange>,
     /// Pending operator (`d`/`c`/`y`) while waiting for motion/object
@@ -447,6 +469,9 @@ impl Default for App {
             syntax: SyntaxEngine::new(),
             lsp: LspClient::new(),
             debug: false,
+            show_metrics: false,
+            metrics: ProcMetrics::default(),
+            bench_report: None,
             last_change: None,
             pending_operator: None,
             pending_to_mod: None,
@@ -611,6 +636,38 @@ impl App {
     /// Paint-time position only (does not mutate saved coords).
     pub fn pet_screen_xy(&self) -> (u16, u16) {
         self.pet.screen_xy(self.screen_width, self.screen_height)
+    }
+
+    /// `:status` — toggle the live CPU/MEM/GPU readout in the status line.
+    pub fn toggle_status_metrics(&mut self) {
+        self.show_metrics = !self.show_metrics;
+        if self.show_metrics {
+            // Force an immediate sample next frame instead of showing stale data.
+            self.metrics.sampled = false;
+            self.message = "status: live CPU/MEM/GPU on — :status to hide".into();
+        } else {
+            self.message = "status: metrics off".into();
+        }
+    }
+
+    /// Frontend hook: store the latest sampled process metrics.
+    pub fn set_metrics(&mut self, m: ProcMetrics) {
+        self.metrics = m;
+    }
+
+    /// `:bench` — run the self-benchmark and switch to the results screen.
+    pub fn run_bench(&mut self) {
+        let report = crate::bench::run(self);
+        self.message = format!("bench: {:.1} ms total · r rerun · Esc exit", report.total_ms);
+        self.bench_report = Some(report);
+        self.mode = Mode::Bench;
+    }
+
+    pub fn exit_bench(&mut self) {
+        if self.mode == Mode::Bench {
+            self.mode = Mode::Normal;
+            self.message.clear();
+        }
     }
 
     pub fn toggle_screensaver(&mut self) {
@@ -3806,6 +3863,17 @@ impl App {
             .unwrap_or(0)
     }
 
+    /// Matches on `row` plus the global index of the first one. `search_matches`
+    /// is built in row order by `collect_matches`, so this binary-searches the
+    /// row's slice instead of the renderer scanning every match for every
+    /// character of every visible line. The base index lets callers keep
+    /// comparing against `search_current` (a global index).
+    pub fn search_matches_row_slice(&self, row: usize) -> (usize, &[Position]) {
+        let lo = self.search_matches.partition_point(|p| p.row < row);
+        let hi = self.search_matches.partition_point(|p| p.row <= row);
+        (lo, &self.search_matches[lo..hi])
+    }
+
     pub fn is_current_search_match(&self, row: usize, col: usize) -> bool {
         self.search_matches
             .get(self.search_current)
@@ -3933,6 +4001,8 @@ impl App {
                 self.xlc.add_output("  git             Full Git workbench");
                 self.xlc.add_output("  screensaver     xeifetch splash (Esc exit)");
                 self.xlc.add_output("  xeifetch / ss   Alias for screensaver");
+                self.xlc.add_output("  bench           Self-benchmark (r rerun · Esc exit)");
+                self.xlc.add_output("  status          Toggle live CPU/MEM/GPU readout");
                 self.xlc.add_output("  pet [path.gif]  Desktop pet (Kitty/Ghostty)");
                 self.xlc.add_output("  settings        Settings panel (Ctrl+,)");
                 self.xlc.add_output("  gh-login / gha  GitHub CLI browser login");
@@ -4067,6 +4137,12 @@ impl App {
             }
             XlcCmd::BlankTab => {
                 self.open_blank_tab();
+            }
+            XlcCmd::Bench => {
+                self.run_bench();
+            }
+            XlcCmd::StatusMetrics => {
+                self.toggle_status_metrics();
             }
             XlcCmd::HooksReload => {
                 self.reload_hooks();
@@ -4679,22 +4755,12 @@ impl App {
             if !before && self.buffer.cursor.col < self.buffer.current_line_len() {
                 self.buffer.move_right();
             }
-            let mut last_was_char = false;
-            for c in text.chars() {
-                match c {
-                    '\n' => {
-                        self.buffer.insert_newline();
-                        last_was_char = false;
-                    }
-                    '\r' => {}
-                    c => {
-                        self.buffer.insert_char(c);
-                        last_was_char = true;
-                    }
-                }
-            }
-            // Vim leaves the cursor ON the last pasted character.
-            if last_was_char {
+            // Bulk insert (O(n)) instead of char-by-char (O(n²) on long lines).
+            let clean = text.replace('\r', "");
+            self.buffer.insert_str(&clean);
+            // Vim leaves the cursor ON the last pasted character (unless the
+            // paste ended on a newline, which lands the cursor at col 0).
+            if !clean.is_empty() && !clean.ends_with('\n') {
                 self.buffer.move_left();
             }
         }

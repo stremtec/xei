@@ -11,8 +11,12 @@ use xei_core::ops::{motion_from_char, parse_textobject, Motion, Operator};
 
 /// Returns (still_running, processed_any_event) — the caller uses the event
 /// flag to keep rendering at full rate around user interaction.
-pub fn handle_events(app: &mut App) -> io::Result<(bool, bool)> {
-    if !event::poll(std::time::Duration::from_millis(10))? {
+pub fn handle_events(app: &mut App, poll_ms: u64) -> io::Result<(bool, bool)> {
+    // `poll` returns the instant input arrives, so a long idle timeout costs no
+    // input latency — it only decides how often we wake to service background
+    // work. The caller passes a short timeout while interacting/animating and a
+    // long one when idle (see the adaptive `poll_ms` in main's run loop).
+    if !event::poll(std::time::Duration::from_millis(poll_ms))? {
         return Ok((app.running, false));
     }
     let mut had_event = false;
@@ -1472,6 +1476,7 @@ fn handle_key(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         Mode::CallHierarchy => handle_call_hierarchy(app, code),
         Mode::Rebase => handle_rebase(app, code),
         Mode::PrReview => handle_pr_review(app, code),
+        Mode::Bench => handle_bench(app, code),
     }
 
     // Append to macro buffer (skip the `q` that starts/stops recording)
@@ -1796,6 +1801,15 @@ fn handle_settings(app: &mut App, code: KeyCode) {
                 .unwrap_or(0);
         }
         _ => {}
+    }
+}
+
+fn handle_bench(app: &mut App, code: KeyCode) {
+    match code {
+        // `r` re-runs the benchmark; anything else leaves the screen.
+        KeyCode::Char('r') | KeyCode::Char('R') => app.run_bench(),
+        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => app.exit_bench(),
+        _ => app.exit_bench(),
     }
 }
 

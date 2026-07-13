@@ -1,6 +1,6 @@
 //! Indent-based code folding.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Inclusive line range that can collapse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,6 +15,13 @@ pub struct FoldState {
     pub ranges: Vec<FoldRange>,
     /// Start lines of currently closed folds.
     pub closed: HashSet<usize>,
+    /// Derived O(1) lookup: fold-start row → widest range starting there.
+    /// Rebuilt whenever `ranges` changes; keeps `fold_at`/`closed_count` off the
+    /// per-row-per-frame linear scan that dominated large-file rendering.
+    starts: HashMap<usize, FoldRange>,
+    /// Derived O(1) lookup: every row currently hidden inside a closed fold.
+    /// Recomputed only when `closed` or `ranges` changes.
+    hidden: HashSet<usize>,
 }
 
 impl FoldState {
@@ -25,6 +32,36 @@ impl FoldState {
     pub fn clear(&mut self) {
         self.ranges.clear();
         self.closed.clear();
+        self.starts.clear();
+        self.hidden.clear();
+    }
+
+    /// Rebuild the `starts` index from `ranges` (keeps the widest fold per row).
+    fn reindex_starts(&mut self) {
+        self.starts.clear();
+        for r in &self.ranges {
+            self.starts
+                .entry(r.start)
+                .and_modify(|cur| {
+                    if r.end > cur.end {
+                        *cur = *r;
+                    }
+                })
+                .or_insert(*r);
+        }
+    }
+
+    /// Recompute the `hidden` set from the closed folds. O(closed × span) once
+    /// per fold-state change instead of O(ranges) per row per frame.
+    fn recompute_hidden(&mut self) {
+        self.hidden.clear();
+        for start in &self.closed {
+            if let Some(r) = self.starts.get(start) {
+                for row in (r.start + 1)..=r.end {
+                    self.hidden.insert(row);
+                }
+            }
+        }
     }
 
     /// Rebuild indent folds from buffer lines.
@@ -82,14 +119,12 @@ impl FoldState {
                 self.closed.insert(r.start);
             }
         }
+        self.reindex_starts();
+        self.recompute_hidden();
     }
 
     pub fn fold_at(&self, row: usize) -> Option<FoldRange> {
-        self.ranges
-            .iter()
-            .copied()
-            .filter(|r| r.start == row)
-            .max_by_key(|r| r.end)
+        self.starts.get(&row).copied()
     }
 
     pub fn is_closed(&self, start: usize) -> bool {
@@ -98,19 +133,12 @@ impl FoldState {
 
     /// True if `row` is hidden inside a closed fold (not the header line).
     pub fn is_hidden(&self, row: usize) -> bool {
-        for start in &self.closed {
-            if let Some(r) = self.fold_at(*start) {
-                if row > r.start && row <= r.end {
-                    return true;
-                }
-            }
-        }
-        false
+        self.hidden.contains(&row)
     }
 
     pub fn toggle(&mut self, row: usize) -> Option<&'static str> {
         // Prefer fold starting at row; else enclosing fold start
-        let start = if self.fold_at(row).is_some() {
+        let start = if self.starts.contains_key(&row) {
             row
         } else {
             self.ranges
@@ -119,39 +147,48 @@ impl FoldState {
                 .max_by_key(|r| r.start)
                 .map(|r| r.start)?
         };
-        if self.closed.contains(&start) {
+        let msg = if self.closed.contains(&start) {
             self.closed.remove(&start);
             Some("opened fold")
-        } else if self.fold_at(start).is_some() {
+        } else if self.starts.contains_key(&start) {
             self.closed.insert(start);
             Some("closed fold")
         } else {
             None
+        };
+        if msg.is_some() {
+            self.recompute_hidden();
         }
+        msg
     }
 
     pub fn close_at(&mut self, row: usize) -> bool {
-        let start = if self.fold_at(row).is_some() {
-            row
-        } else {
+        if !self.starts.contains_key(&row) {
             return false;
-        };
-        self.closed.insert(start);
+        }
+        self.closed.insert(row);
+        self.recompute_hidden();
         true
     }
 
     pub fn open_at(&mut self, row: usize) -> bool {
-        self.closed.remove(&row)
+        let removed = self.closed.remove(&row);
+        if removed {
+            self.recompute_hidden();
+        }
+        removed
     }
 
     pub fn close_all(&mut self) {
         for r in &self.ranges {
             self.closed.insert(r.start);
         }
+        self.recompute_hidden();
     }
 
     pub fn open_all(&mut self) {
         self.closed.clear();
+        self.hidden.clear();
     }
 
     /// Lines hidden under a closed fold starting at `start`.
@@ -196,5 +233,32 @@ mod tests {
         f.toggle(0);
         assert!(f.is_hidden(1));
         assert!(!f.is_hidden(0));
+    }
+
+    #[test]
+    fn close_all_open_all_updates_hidden_index() {
+        let lines = vec![
+            "fn a() {".into(),
+            "    let x = 1;".into(),
+            "}".into(),
+            "fn b() {".into(),
+            "    let y = 2;".into(),
+            "}".into(),
+        ];
+        let mut f = FoldState::new();
+        f.rebuild(&lines, 4);
+        f.close_all();
+        assert!(f.is_hidden(1));
+        assert!(f.is_hidden(4));
+        assert!(!f.is_hidden(0));
+        assert!(!f.is_hidden(3));
+        f.open_all();
+        assert!(!f.is_hidden(1));
+        assert!(!f.is_hidden(4));
+        // open_at only recomputes when something was actually closed
+        f.close_at(0);
+        assert!(f.is_hidden(1));
+        f.open_at(0);
+        assert!(!f.is_hidden(1));
     }
 }

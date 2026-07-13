@@ -6,7 +6,7 @@ members = ["xei-core", "xei", "suisei/src-tauri"]
 # scripts/release.sh); xei-core and xei inherit with `version.workspace = true`.
 # The install scripts resolve the version dynamically and are never bumped.
 [workspace.package]
-version = "3.0.8"
+version = "3.0.9"
 
 [profile.release]
 lto = "thin"

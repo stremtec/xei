@@ -202,6 +202,16 @@ impl SyntaxEngine {
             }
         }
     }
+
+    /// Contiguous slice of highlight tokens on `row`. `tokens` is kept sorted by
+    /// row (see the `sort_by_key` in `parse`), so this is an O(log n) binary
+    /// search instead of the O(n) whole-file filter the renderer used to run for
+    /// every visible row on every frame.
+    pub fn tokens_for_row(&self, row: usize) -> &[HlToken] {
+        let lo = self.tokens.partition_point(|t| t.3 < row);
+        let hi = self.tokens.partition_point(|t| t.3 <= row);
+        &self.tokens[lo..hi]
+    }
 }
 
 fn push_node_tokens(

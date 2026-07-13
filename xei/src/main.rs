@@ -19,6 +19,7 @@ mod event;
 mod gfx;
 mod gpu_frame;
 mod kitty_gfx;
+mod metrics;
 mod term_caps;
 mod ui;
 
@@ -322,6 +323,10 @@ fn run_app(
     let mut gfx_registry = gfx::GfxRegistry::new();
     let mut full_until = std::time::Instant::now() + std::time::Duration::from_millis(700);
     let mut last_draw = std::time::Instant::now() - std::time::Duration::from_secs(1);
+    let mut last_ext_check = std::time::Instant::now();
+    // `:status` self-metrics: sampled on a ~1s cadence only while enabled.
+    let mut metrics_sampler = metrics::Sampler::new();
+    let mut last_metrics = std::time::Instant::now() - std::time::Duration::from_secs(2);
     while app.running {
         let now = std::time::Instant::now();
         let live_surface = app.terminal.open
@@ -329,8 +334,11 @@ fn run_app(
             || app.git_wb.is_loading()
             || app.pr_review.loading
             || app.dap.is_session();
-        let draw_now = now < full_until
-            || live_surface
+        // "Hot" while the user is interacting (700ms after the last event) or a
+        // live surface is animating; "idle" otherwise. Drives both the redraw
+        // decision and the input poll timeout below.
+        let hot = now < full_until || live_surface;
+        let draw_now = hot
             || now.duration_since(last_draw) >= std::time::Duration::from_millis(100);
         if draw_now {
             last_draw = now;
@@ -395,7 +403,11 @@ fn run_app(
             let _ = terminal.set_cursor_position((cx, cy));
         }
         } // draw_now
-        let (running, had_event) = event::handle_events(app)?;
+        // Adaptive input poll: near-instant while hot for responsiveness, long
+        // while idle so the process sleeps instead of spinning at 100Hz. Input
+        // still wakes `poll` immediately, so idle costs no latency.
+        let poll_ms = if hot { 8 } else { 120 };
+        let (running, had_event) = event::handle_events(app, poll_ms)?;
         if had_event {
             full_until = std::time::Instant::now() + std::time::Duration::from_millis(700);
         }
@@ -544,7 +556,28 @@ fn run_app(
                 app.message = format!("Recording @{}…", reg);
             }
         }
-        app.check_external_change();
+        // External-change detection does a filesystem stat; run it on a fixed
+        // wall-clock cadence rather than every loop iteration (which would be
+        // ~125 stats/sec while typing and 100/sec even when idle).
+        if now.duration_since(last_ext_check) >= std::time::Duration::from_millis(750) {
+            last_ext_check = now;
+            app.check_external_change();
+        }
+        // Live self-metrics for the `:status` line. Sampled only while enabled,
+        // and only every ~1s (CPU% is a delta over the sampling interval). The
+        // first sample lands promptly so the readout isn't stuck on "metrics…".
+        if app.show_metrics {
+            let due = if app.metrics.sampled {
+                std::time::Duration::from_millis(1000)
+            } else {
+                std::time::Duration::from_millis(150)
+            };
+            if now.duration_since(last_metrics) >= due {
+                last_metrics = now;
+                let m = metrics_sampler.sample();
+                app.set_metrics(m);
+            }
+        }
     }
     Ok(())
 }

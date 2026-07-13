@@ -173,6 +173,10 @@ pub enum XlcCmd {
     BlankTab,
     /// `:update` — self-update to the latest release
     Update,
+    /// `:bench` — run the in-editor self-benchmark
+    Bench,
+    /// `:status` — toggle the live CPU/MEM/GPU status readout
+    StatusMetrics,
 }
 
 fn parse_command(input: &str) -> XlcCmd {
@@ -251,6 +255,8 @@ fn parse_command(input: &str) -> XlcCmd {
         }
         "hooks" | "hooks-reload" => XlcCmd::HooksReload,
         "update" | "upgrade" => XlcCmd::Update,
+        "bench" | "benchmark" => XlcCmd::Bench,
+        "status" | "stats" | "metrics" => XlcCmd::StatusMetrics,
         "mbb" | "new" | "blank" => XlcCmd::BlankTab,
         "lsp" | "LspStart" if !arg.is_empty() => XlcCmd::LspStart(arg.to_string()),
         "Rename" | "rename" if !arg.is_empty() => XlcCmd::LspRename(arg.to_string()),

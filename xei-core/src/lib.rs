@@ -1,3 +1,4 @@
+pub mod bench;
 pub mod buffer;
 pub mod clipboard;
 pub mod call_hierarchy;
@@ -45,7 +46,7 @@ pub mod xlc;
 pub mod app;
 pub use app::{
     App, BufferTab, EditorContextMenu, EditorCtxItem, EditorViewport, Mode, MouseState,
-    ResizeTarget, SplitSepHit, set_cursor_esc,
+    ProcMetrics, ResizeTarget, SplitSepHit, set_cursor_esc,
 };
 pub use macros::{MacroBank, MacroKey};
 pub use multi_cursor::MultiCursor;

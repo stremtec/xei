@@ -30,6 +30,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         return;
     }
 
+    // `:bench` — exclusive full-screen benchmark results
+    if app.mode == Mode::Bench {
+        draw_bench(f, app, area);
+        app.screen_width = area.width;
+        app.screen_height = area.height;
+        return;
+    }
+
     let ext = app.file_extension();
     // O(file) join + parse only when the text actually changed.
     if app.syntax_seen_version != app.buffer.version() {
@@ -502,6 +510,93 @@ fn draw_screensaver(f: &mut Frame, app: &mut App, area: Rect) {
         ))
         .alignment(Alignment::Center),
         Rect::new(area.x, foot_y, area.width, 1),
+    );
+}
+
+/// `:bench` — full-screen self-benchmark results.
+fn draw_bench(f: &mut Frame, app: &App, area: Rect) {
+    let fg = app.theme.fg;
+    let muted = app.theme.muted;
+    let accent = app.theme.accent;
+
+    f.render_widget(
+        Block::default().style(Style::default().bg(app.theme.editor_bg).fg(fg)),
+        area,
+    );
+
+    let Some(report) = app.bench_report.as_ref() else {
+        return;
+    };
+
+    // Centered panel, capped width for readability.
+    let panel_w = area.width.min(72);
+    let x = area.x + (area.width.saturating_sub(panel_w)) / 2;
+    let name_w = 30usize;
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::styled(
+        "░▒▓  xei · benchmark  ▓▒░",
+        Style::default().fg(accent).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(Span::styled(
+        format!(
+            "synthetic workload: {} lines · hot paths from the render/edit loop",
+            report.synthetic_lines
+        ),
+        Style::default().fg(muted).add_modifier(Modifier::ITALIC),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(
+            format!("{:<name_w$}", "benchmark"),
+            Style::default().fg(muted).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{:>10}  ", "time"),
+            Style::default().fg(muted).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("throughput", Style::default().fg(muted).add_modifier(Modifier::BOLD)),
+    ]));
+
+    for r in &report.results {
+        // Sub-millisecond → green (fast); a few ms → normal; slow → warning.
+        let ms_color = if r.ms < 5.0 {
+            app.theme.success
+        } else if r.ms < 50.0 {
+            fg
+        } else {
+            app.theme.warning
+        };
+        let name = if r.name.chars().count() > name_w {
+            r.name.chars().take(name_w - 1).collect::<String>() + "…"
+        } else {
+            r.name.clone()
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{:<name_w$}", name), Style::default().fg(fg)),
+            Span::styled(
+                format!("{:>8.2} ms  ", r.ms),
+                Style::default().fg(ms_color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(r.detail.clone(), Style::default().fg(muted)),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        format!("total {:.1} ms", report.total_ms),
+        Style::default().fg(accent).add_modifier(Modifier::BOLD),
+    )));
+    lines.push(Line::from(Span::styled(
+        "r rerun · Esc/q exit",
+        Style::default().fg(muted).add_modifier(Modifier::ITALIC),
+    )));
+
+    let panel_h = lines.len() as u16;
+    let y = area.y + (area.height.saturating_sub(panel_h)) / 2;
+    f.render_widget(
+        Paragraph::new(lines),
+        Rect::new(x, y, panel_w, panel_h.min(area.height)),
     );
 }
 
@@ -5256,26 +5351,16 @@ fn render_line_with_highlights(
         return vec![Span::styled(" ", Style::default().bg(line_bg))];
     }
 
-    // Quality stack: LSP semantic tokens > tree-sitter query > line fallback
-    let semantic: Vec<&(highlight::TokenKind, usize, usize, usize)> = app
-        .lsp
-        .semantic_tokens
-        .iter()
-        .filter(|(_, _, _, r)| *r == *row)
-        .collect();
-    let hl_tokens: Vec<&(highlight::TokenKind, usize, usize, usize)> = app
-        .syntax
-        .tokens
-        .iter()
-        .filter(|(_, _, _, r)| *r == *row)
-        .collect();
-    let fallback = highlight::highlight_line(text, ext);
-    let row_diags: Vec<&xei_core::lsp::Diagnostic> = app
-        .lsp
-        .diagnostics
-        .iter()
-        .filter(|d| d.row == *row)
-        .collect();
+    // Quality stack: LSP semantic tokens > tree-sitter query > line fallback.
+    // Each list is kept row-sorted at its source, so these are O(log n) slices
+    // instead of the O(whole-file) filters this ran per visible row per frame.
+    let semantic = app.lsp.semantic_tokens_for_row(*row);
+    let hl_tokens = app.syntax.tokens_for_row(*row);
+    let row_diags = app.lsp.diagnostics_for_row(*row);
+    // Fallback tokenizer is O(line); compute it lazily only when a character is
+    // covered by neither semantic nor tree-sitter tokens (fully-highlighted
+    // lines — the common case with tree-sitter active — skip it entirely).
+    let mut fallback: Option<Vec<(highlight::TokenKind, usize, usize)>> = None;
 
     let visual_style = Style::default()
         .bg(app.theme.selection_bg)
@@ -5288,6 +5373,13 @@ fn render_line_with_highlights(
         .fg(Color::Black)
         .add_modifier(Modifier::BOLD);
     let pattern_chars = app.search_pattern_len_chars();
+    // Row-local search matches (binary-searched) so the per-character highlight
+    // check doesn't scan every match in the file for every visible line.
+    let (row_match_base, row_matches) = if pattern_chars > 0 {
+        app.search_matches_row_slice(*row)
+    } else {
+        (0, &[][..])
+    };
 
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut vis_col = 0usize;
@@ -5379,7 +5471,7 @@ fn render_line_with_highlights(
 
         // 1) Tightest semantic token wins (LSP-accurate kinds)
         let mut best_sem: Option<(usize, highlight::TokenKind)> = None;
-        for (kind, st, ed, _) in &semantic {
+        for (kind, st, ed, _) in semantic {
             if i >= *st && i < *ed {
                 let w = ed.saturating_sub(*st);
                 if best_sem.map(|(bw, _)| w < bw).unwrap_or(true) {
@@ -5392,7 +5484,7 @@ fn render_line_with_highlights(
         } else {
             // 2) Tightest tree-sitter query capture
             let mut best: Option<(usize, highlight::TokenKind)> = None;
-            for (kind, st, ed, _) in &hl_tokens {
+            for (kind, st, ed, _) in hl_tokens {
                 if i >= *st && i < *ed {
                     let w = ed.saturating_sub(*st);
                     if best.map(|(bw, _)| w < bw).unwrap_or(true) {
@@ -5403,8 +5495,10 @@ fn render_line_with_highlights(
             if let Some((_, kind)) = best {
                 s = highlight::style_for(app.theme, kind).bg(line_bg);
             } else {
-                // 3) Line tokenizer fills gaps for unsupported grammars / anonymous nodes
-                for &(kind, st, ed) in &fallback {
+                // 3) Line tokenizer fills gaps for unsupported grammars /
+                //    anonymous nodes — computed once per line, only if reached.
+                let fb = fallback.get_or_insert_with(|| highlight::highlight_line(text, ext));
+                for &(kind, st, ed) in fb.iter() {
                     if i >= st && i < ed {
                         s = highlight::style_for(app.theme, kind).bg(line_bg);
                         break;
@@ -5439,9 +5533,9 @@ fn render_line_with_highlights(
         }
 
         if pattern_chars > 0 && app.active_search_pattern().is_some() {
-            for (mi, pos) in app.search_matches.iter().enumerate() {
-                if pos.row == *row && i >= pos.col && i < pos.col + pattern_chars {
-                    s = if mi == app.search_current {
+            for (li, pos) in row_matches.iter().enumerate() {
+                if i >= pos.col && i < pos.col + pattern_chars {
+                    s = if row_match_base + li == app.search_current {
                         search_current_style
                     } else {
                         search_style
@@ -5451,7 +5545,7 @@ fn render_line_with_highlights(
             }
         }
 
-        for diag in &row_diags {
+        for diag in row_diags {
             if i >= diag.col_start && i < diag.col_end {
                 s = diag_underline_style(app, s, &diag.severity);
                 break;
@@ -6588,6 +6682,7 @@ fn draw_statusline(f: &mut Frame, app: &App, area: Rect) {
             Mode::CallHierarchy => " CALLS ",
             Mode::Rebase => " REBASE ",
             Mode::PrReview => " PR ",
+            Mode::Bench => " BENCH ",
         }
     };
 
@@ -6621,6 +6716,7 @@ fn draw_statusline(f: &mut Frame, app: &App, area: Rect) {
             Mode::CallHierarchy => (app.theme.accent_fg, app.theme.accent),
             Mode::Rebase => (app.theme.accent_fg, app.theme.warning),
             Mode::PrReview => (app.theme.accent_fg, app.theme.accent),
+            Mode::Bench => (app.theme.accent_fg, app.theme.accent),
         };
         Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD)
     };
@@ -6771,6 +6867,31 @@ fn draw_statusline(f: &mut Frame, app: &App, area: Rect) {
     }
 
     let mut right_parts: Vec<Span> = Vec::new();
+
+    // `:status` — live self-resource readout (CPU / MEM / GPU of this process).
+    if app.show_metrics {
+        let m = &app.metrics;
+        let seg = if !m.sampled {
+            " ◷ metrics… ".to_string()
+        } else {
+            let gpu = match m.gpu_pct {
+                Some(g) => format!("{g:.0}%"),
+                None => "—".to_string(),
+            };
+            format!(
+                " cpu {:.0}% · mem {:.1}% ({:.0}MB) · gpu {} ",
+                m.cpu_pct, m.mem_pct, m.mem_mb, gpu
+            )
+        };
+        let cpu_hot = m.sampled && m.cpu_pct >= 80.0;
+        right_parts.push(Span::styled(
+            seg,
+            Style::default()
+                .fg(if cpu_hot { app.theme.warning } else { app.theme.accent })
+                .bg(app.theme.status_bg)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
 
     // Horizontal pan indicator (wrap off + panned right)
     if !app.wrap_lines && app.hscroll > 0 {

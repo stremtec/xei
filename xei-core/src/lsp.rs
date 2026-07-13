@@ -725,6 +725,22 @@ impl LspClient {
         self.send_raw(&msg);
     }
 
+    /// Contiguous slice of semantic tokens on `row`. Kept row-sorted at decode
+    /// time so the renderer binary-searches instead of scanning the whole file
+    /// once per visible row per frame.
+    pub fn semantic_tokens_for_row(&self, row: usize) -> &[SemanticToken] {
+        let lo = self.semantic_tokens.partition_point(|t| t.3 < row);
+        let hi = self.semantic_tokens.partition_point(|t| t.3 <= row);
+        &self.semantic_tokens[lo..hi]
+    }
+
+    /// Contiguous slice of diagnostics on `row`. Kept row-sorted when published.
+    pub fn diagnostics_for_row(&self, row: usize) -> &[Diagnostic] {
+        let lo = self.diagnostics.partition_point(|d| d.row < row);
+        let hi = self.diagnostics.partition_point(|d| d.row <= row);
+        &self.diagnostics[lo..hi]
+    }
+
     pub fn request_code_action(&mut self, path: &str, row: usize, col: usize) {
         if !self.server_running {
             return;
@@ -901,6 +917,8 @@ impl LspClient {
                 diag_cols_utf16_to_chars(&mut diags, &self.semantic_doc_text);
                 // Accept if URI matches (normalized) or empty
                 if uri.is_empty() || uris_match(&uri, &self.current_uri) {
+                    // Keep row-sorted so `diagnostics_for_row` can binary-search.
+                    diags.sort_by_key(|d| d.row);
                     self.diagnostics = diags; // empty clears
                 }
                 return;
@@ -1030,8 +1048,11 @@ impl LspClient {
             PendingReq::SemanticTokens => {
                 let data = parse_semantic_data(&msg.body);
                 let lines: Vec<&str> = self.semantic_doc_text.split('\n').collect();
-                self.semantic_tokens =
-                    decode_semantic_tokens(&data, &self.semantic_token_types, &lines);
+                let mut toks = decode_semantic_tokens(&data, &self.semantic_token_types, &lines);
+                // LSP emits tokens in position order already, but guarantee the
+                // row-sorted invariant `semantic_tokens_for_row` relies on.
+                toks.sort_by_key(|t| t.3);
+                self.semantic_tokens = toks;
                 // If document changed while request was in flight, re-fetch
                 if self.doc_version != self.last_semantic_req_version {
                     self.semantic_dirty = true;

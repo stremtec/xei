@@ -58,7 +58,7 @@ iwr https://raw.githubusercontent.com/stremtec/xei/master/xei/install.ps1 | iex
 - **10 themes** — ocean, monokai, nord, solarized, gruvbox, everforest, sakura, newspaper, mono, mono_dark
 - **CJK support** — Korean, Japanese, Chinese characters render at full width
 - **Light on large files** — row-indexed syntax tokens / folds / search matches (no per-frame whole-file scans), O(n) bulk paste, and an adaptive input loop that idles instead of spinning at 100 Hz
-- **Self-metrics & benchmark** — `:status` shows this process's live CPU / memory / GPU in the status line; `:bench` times the editor's own hot paths on-screen (`r` rerun · `Esc` exit)
+- **Self-metrics & benchmark** — `:status` shows this process's live CPU (one-core-normalized, with cores-in-use) and memory in the status line (plus device GPU% on Linux); `:bench` times the editor's own hot paths on-screen (`r` rerun · `Esc` exit)
 
 ## Terminal compatibility
 
@@ -203,7 +203,7 @@ Auto-detected on file open. Status bar shows `LSP: clangd (3)`.
 | `:mbb` | New blank tab (welcome screen) |
 | `:LspStart <cmd>` | Start language server |
 | `:bench` | Self-benchmark the editor hot paths (`r` rerun · `Esc` exit) |
-| `:status` | Toggle a live CPU / memory / GPU readout in the status line |
+| `:status` | Toggle a live CPU / memory readout in the status line (GPU on Linux) |
 | `:help` | List all commands |
 
 ## Themes

@@ -6868,19 +6868,25 @@ fn draw_statusline(f: &mut Frame, app: &App, area: Rect) {
 
     let mut right_parts: Vec<Span> = Vec::new();
 
-    // `:status` — live self-resource readout (CPU / MEM / GPU of this process).
+    // `:status` — live self-resource readout of this process. CPU is
+    // one-core-normalized (like `top`), with cores-in-use next to it; memory is
+    // resident. GPU is only shown where a real per-device figure exists (Linux
+    // sysfs) — macOS has no non-root per-process value and xei's GPU work runs
+    // in the terminal emulator anyway, so it's omitted there.
     if app.show_metrics {
         let m = &app.metrics;
         let seg = if !m.sampled {
             " ◷ metrics… ".to_string()
         } else {
+            let cores_used = m.cpu_pct / 100.0;
+            let cores = m.cores.max(1);
             let gpu = match m.gpu_pct {
-                Some(g) => format!("{g:.0}%"),
-                None => "—".to_string(),
+                Some(g) => format!(" · gpu {g:.0}%"),
+                None => String::new(),
             };
             format!(
-                " cpu {:.0}% · mem {:.1}% ({:.0}MB) · gpu {} ",
-                m.cpu_pct, m.mem_pct, m.mem_mb, gpu
+                " cpu {:.0}% ({:.1}/{}c) · mem {:.1}% ({:.0}MB){} ",
+                m.cpu_pct, cores_used, cores, m.mem_pct, m.mem_mb, gpu
             )
         };
         let cpu_hot = m.sampled && m.cpu_pct >= 80.0;

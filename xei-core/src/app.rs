@@ -72,7 +72,10 @@ pub enum Mode {
 /// (e.g. macOS without elevated tooling) and renders as `—`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ProcMetrics {
+    /// CPU busy normalized to one core (100% = one full core, like `top`).
     pub cpu_pct: f32,
+    /// Total logical cores, so the UI can also show cores-in-use (cpu%/100).
+    pub cores: u32,
     pub mem_pct: f32,
     pub mem_mb: f32,
     pub gpu_pct: Option<f32>,

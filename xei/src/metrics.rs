@@ -3,8 +3,9 @@
 //! CPU and memory are read through the platform's native API (libc on Unix,
 //! kernel32 on Windows) — no extra dependencies. Per-process GPU utilisation
 //! has no portable API: Linux exposes a device-wide figure via sysfs; macOS and
-//! Windows have none without private APIs / elevation, so GPU reads as `None`
-//! there and renders as `—`.
+//! Windows have none without private APIs / elevation (and xei's GPU work runs
+//! in the terminal emulator, not this process), so GPU is `None` there and the
+//! status line simply omits it.
 
 use std::time::Instant;
 
@@ -14,6 +15,7 @@ pub struct Sampler {
     /// (wall clock, cumulative process CPU seconds) at the previous sample.
     last: Option<(Instant, f64)>,
     total_mem: u64,
+    cores: u32,
 }
 
 impl Sampler {
@@ -21,6 +23,10 @@ impl Sampler {
         Self {
             last: None,
             total_mem: total_physical_memory().max(1),
+            // Logical cores usable by this process; portable, no platform FFI.
+            cores: std::thread::available_parallelism()
+                .map(|n| n.get() as u32)
+                .unwrap_or(1),
         }
     }
 
@@ -48,6 +54,7 @@ impl Sampler {
 
         ProcMetrics {
             cpu_pct,
+            cores: self.cores,
             mem_pct,
             mem_mb,
             gpu_pct: gpu_percent(),
@@ -323,3 +330,4 @@ mod tests {
         assert!(m.cpu_pct >= 0.0, "cpu% negative: {}", m.cpu_pct);
     }
 }
+

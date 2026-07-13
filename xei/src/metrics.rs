@@ -1,9 +1,10 @@
 //! Best-effort per-process resource sampling for the `:status` line.
 //!
-//! CPU and memory use libc (already a dependency) and are accurate on macOS and
-//! Linux. Per-process GPU utilisation has no portable API: Linux exposes a
-//! device-wide figure via sysfs; macOS has none without private APIs / root, so
-//! GPU reads as `None` there and renders as `—`.
+//! CPU and memory are read through the platform's native API (libc on Unix,
+//! kernel32 on Windows) — no extra dependencies. Per-process GPU utilisation
+//! has no portable API: Linux exposes a device-wide figure via sysfs; macOS and
+//! Windows have none without private APIs / elevation, so GPU reads as `None`
+//! there and renders as `—`.
 
 use std::time::Instant;
 
@@ -55,7 +56,9 @@ impl Sampler {
     }
 }
 
-/// Cumulative user+system CPU time of this process, in seconds. Portable.
+// ── CPU time ───────────────────────────────────────────────────────────────
+
+#[cfg(unix)]
 fn process_cpu_seconds() -> f64 {
     unsafe {
         let mut u: libc::rusage = std::mem::zeroed();
@@ -67,9 +70,35 @@ fn process_cpu_seconds() -> f64 {
     }
 }
 
+#[cfg(unix)]
 fn tv_secs(t: libc::timeval) -> f64 {
     t.tv_sec as f64 + t.tv_usec as f64 / 1_000_000.0
 }
+
+#[cfg(windows)]
+fn process_cpu_seconds() -> f64 {
+    unsafe {
+        let mut creation = win::Filetime::default();
+        let mut exit = win::Filetime::default();
+        let mut kernel = win::Filetime::default();
+        let mut user = win::Filetime::default();
+        if win::GetProcessTimes(
+            win::GetCurrentProcess(),
+            &mut creation,
+            &mut exit,
+            &mut kernel,
+            &mut user,
+        ) != 0
+        {
+            // Kernel + user time, each in 100-nanosecond ticks.
+            (kernel.as_ticks() + user.as_ticks()) as f64 * 1e-7
+        } else {
+            0.0
+        }
+    }
+}
+
+// ── Resident memory (current) ──────────────────────────────────────────────
 
 #[cfg(target_os = "macos")]
 fn process_resident_bytes() -> u64 {
@@ -109,10 +138,10 @@ fn process_resident_bytes() -> u64 {
     0
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
 fn process_resident_bytes() -> u64 {
-    // ru_maxrss is max (not current) RSS; a coarse fallback where nothing
-    // better is portable. Units are KB on these platforms.
+    // Other Unix: ru_maxrss is max (not current) RSS — a coarse fallback. Units
+    // are KB on the BSDs this branch covers.
     unsafe {
         let mut u: libc::rusage = std::mem::zeroed();
         if libc::getrusage(libc::RUSAGE_SELF, &mut u) == 0 {
@@ -122,6 +151,21 @@ fn process_resident_bytes() -> u64 {
         }
     }
 }
+
+#[cfg(windows)]
+fn process_resident_bytes() -> u64 {
+    unsafe {
+        let mut c = win::ProcessMemoryCounters::default();
+        c.cb = std::mem::size_of::<win::ProcessMemoryCounters>() as u32;
+        if win::K32GetProcessMemoryInfo(win::GetCurrentProcess(), &mut c, c.cb) != 0 {
+            c.working_set_size as u64
+        } else {
+            0
+        }
+    }
+}
+
+// ── Total physical memory ──────────────────────────────────────────────────
 
 #[cfg(target_os = "macos")]
 fn total_physical_memory() -> u64 {
@@ -143,7 +187,7 @@ fn total_physical_memory() -> u64 {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(unix, not(target_os = "macos")))]
 fn total_physical_memory() -> u64 {
     unsafe {
         let pages = libc::sysconf(libc::_SC_PHYS_PAGES);
@@ -155,6 +199,21 @@ fn total_physical_memory() -> u64 {
         }
     }
 }
+
+#[cfg(windows)]
+fn total_physical_memory() -> u64 {
+    unsafe {
+        let mut m = win::MemoryStatusEx::default();
+        m.length = std::mem::size_of::<win::MemoryStatusEx>() as u32;
+        if win::GlobalMemoryStatusEx(&mut m) != 0 {
+            m.total_phys
+        } else {
+            0
+        }
+    }
+}
+
+// ── GPU ────────────────────────────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]
 fn gpu_percent() -> Option<f32> {
@@ -172,8 +231,73 @@ fn gpu_percent() -> Option<f32> {
 
 #[cfg(not(target_os = "linux"))]
 fn gpu_percent() -> Option<f32> {
-    // No portable per-process GPU metric (macOS needs private APIs / root).
+    // No portable per-process GPU metric (macOS / Windows need private APIs).
     None
+}
+
+// ── Windows kernel32 bindings (no external crate) ──────────────────────────
+
+#[cfg(windows)]
+mod win {
+    use std::os::raw::c_void;
+
+    #[repr(C)]
+    #[derive(Default)]
+    pub struct Filetime {
+        pub low: u32,
+        pub high: u32,
+    }
+    impl Filetime {
+        pub fn as_ticks(&self) -> u64 {
+            ((self.high as u64) << 32) | (self.low as u64)
+        }
+    }
+
+    #[repr(C)]
+    #[derive(Default)]
+    pub struct ProcessMemoryCounters {
+        pub cb: u32,
+        pub page_fault_count: u32,
+        pub peak_working_set_size: usize,
+        pub working_set_size: usize,
+        pub quota_peak_paged_pool_usage: usize,
+        pub quota_paged_pool_usage: usize,
+        pub quota_peak_non_paged_pool_usage: usize,
+        pub quota_non_paged_pool_usage: usize,
+        pub pagefile_usage: usize,
+        pub peak_pagefile_usage: usize,
+    }
+
+    #[repr(C)]
+    #[derive(Default)]
+    pub struct MemoryStatusEx {
+        pub length: u32,
+        pub memory_load: u32,
+        pub total_phys: u64,
+        pub avail_phys: u64,
+        pub total_page_file: u64,
+        pub avail_page_file: u64,
+        pub total_virtual: u64,
+        pub avail_virtual: u64,
+        pub avail_extended_virtual: u64,
+    }
+
+    unsafe extern "system" {
+        pub fn GetCurrentProcess() -> *mut c_void;
+        pub fn GetProcessTimes(
+            process: *mut c_void,
+            creation: *mut Filetime,
+            exit: *mut Filetime,
+            kernel: *mut Filetime,
+            user: *mut Filetime,
+        ) -> i32;
+        pub fn K32GetProcessMemoryInfo(
+            process: *mut c_void,
+            counters: *mut ProcessMemoryCounters,
+            cb: u32,
+        ) -> i32;
+        pub fn GlobalMemoryStatusEx(buffer: *mut MemoryStatusEx) -> i32;
+    }
 }
 
 #[cfg(test)]
@@ -188,7 +312,9 @@ mod tests {
         // busy-loop a hair so the second sample has a nonzero interval
         let start = std::time::Instant::now();
         let mut acc = 0u64;
-        while start.elapsed().as_millis() < 30 { acc = acc.wrapping_add(1); }
+        while start.elapsed().as_millis() < 30 {
+            acc = acc.wrapping_add(1);
+        }
         std::hint::black_box(acc);
         let m = s.sample();
         assert!(m.sampled);

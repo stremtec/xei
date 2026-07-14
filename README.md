@@ -22,6 +22,8 @@ iwr https://raw.githubusercontent.com/stremtec/xei/master/xei/install.ps1 | iex
 
 ## Features
 
+- **IN DEV** - Vscode plugin intergration (Using Native vscode plugin in xei)
+
 - **LSP integration** — auto-starts servers when installed (rust-analyzer, pyright, tsserver, clangd, gopls, jdtls, lua-ls, zls, …). Stable init/didOpen/versioned didChange, diagnostics, `gd`/`gr`/`K`, completion, **semantic tokens**
 - **Syntax highlighting (quality stack)** — LSP semantic tokens ▸ tree-sitter `highlights.scm` queries (Rust, Python, JS/TS, C, Go, Bash, JSON) ▸ line-tokenizer fallback for many other languages; CJK-safe char columns
 - **Git gutter** — `+` / `~` / `▁` signs from `git diff HEAD`
